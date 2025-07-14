@@ -1,0 +1,9 @@
+{
+	"max_memory": "25.GB",
+	"max_cpus": 6,
+        "max_time": "4.h",
+	"skip_trimming": false,
+	"skip_alignment": true,
+	"pseudo_aligner": "salmon",
+	"save_reference": false
+}
