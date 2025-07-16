@@ -103,13 +103,16 @@ expr_data_t <- expr_data_t %>%
 head(expr_data_t) # just to look
 ```
 There were 3 lines of data that did not pass Salmon_Quant, we will be removing them from the final data frame. 
+There were 2 rows of data that failed trimming, we will be removing these as well.
 
 ```{r remove_failed}
-SRR14136790
+# vector of IDs to remove
+remove_ids <- c("SRR14136790", "SRR14136773", "SRR14136808", "SRR14136821", "SRR14136810")
 
-SRR14136773
+# Filter out rows where sample starts with any of the remove_ids
+expr_data_t <- expr_data_t[!grepl(paste0("^(", paste(remove_ids, collapse = "|"), ")"), expr_data_t$sample), ]
 
-SRR14136808
+head(expr_data_t) 
 ```
 ## Saving the data to local machine
 Please edit the path as necessary
