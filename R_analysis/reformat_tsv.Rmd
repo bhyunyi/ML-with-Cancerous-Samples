@@ -16,10 +16,15 @@ Pathways may need to be edited for personal use.
 library(readr)
 
 #Please change the paths below as you see fit!
+# path1Brian <- 
+# path2Brian <- 
 
-file1 <- read_tsv("C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv")
+path1Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv"
+path2Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv"
 
-file2 <- read_tsv("C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv")
+file1 <- read_tsv(path1Tiffany)
+
+file2 <- read_tsv(path2Tiffany)
 
 # just to look
 head(file1)
@@ -103,7 +108,10 @@ Please edit the path as necessary
 ```{r save_data}
 library(readr)
 
-write_tsv(expr_data_t, "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv")
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+write_tsv(expr_data_t, outpathTiffany)
 
 ```
 
