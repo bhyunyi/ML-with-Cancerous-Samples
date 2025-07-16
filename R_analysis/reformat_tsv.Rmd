@@ -102,6 +102,15 @@ expr_data_t <- expr_data_t %>%
 
 head(expr_data_t) # just to look
 ```
+There were 3 lines of data that did not pass Salmon_Quant, we will be removing them from the final data frame. 
+
+```{r remove_failed}
+SRR14136790
+
+SRR14136773
+
+SRR14136808
+```
 ## Saving the data to local machine
 Please edit the path as necessary
 
