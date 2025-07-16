@@ -14,6 +14,9 @@ Pathways may need to be edited for personal use.
 ```{r readin}
 # First lets read in the two files. 
 library(readr)
+
+#Please change the paths below as you see fit!
+
 file1 <- read_tsv("C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv")
 
 file2 <- read_tsv("C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv")
@@ -23,12 +26,86 @@ head(file1)
 head(file2)
 ```
 
-## Including Plots
+Great. Both of these files look good. 
+The next step would be combining the two into one file to work with.
 
-You can also embed plots, for example:
+```{r combine_files}
+#Before combining I want to make sure that the tx column and the gene_id column are the same for both files
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+identical(file1$tx, file2$tx) #this outputs true
+
+identical(file1$gene_id, file2$gene_id) # this outputs true
+
+
+library(dplyr) # load necessary library
+
+# I will remove these first two columns from file 2
+file2_trimmed <- file2[, -c(1,2)]
+
+# Combine by columns
+combined <- bind_cols(file1, file2_trimmed)
+
+# check dimensions and output
+dim(combined)
+head(combined)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Fantastic. So far it is looking good!
+The next step is now to transpose this data so the rows are the samples.
+
+**I will not be including the geneID's in the final data frame**
+- this is to keep the final data frame cleaner
+- we will also be using the transcription information for downstream analysis, not the geneIDs
+
+```{r transpose_data}
+#First I will separate out the transcription info from the expression data
+transcript_info <- combined[, 1:2] # This is just the first two columns
+
+expr_info <- combined[, -c(1,2)]# Everything except the first two columns
+
+# Transpose
+expr_data_t<- as.data.frame(t(expr_info))
+# head(expr_data_t) # just to look
+
+# add the column names as the transcription id's
+# I am opting to not include the gene id's since we will be including the transcription ID's and only 
+colnames(expr_data_t) <- transcript_info$tx
+#head(expr_data_t) # just to look
+
+# add the sample names as colunms so it's easier to work with
+expr_data_t <- expr_data_t %>%
+  mutate(sample = rownames(expr_data_t)) %>%
+  relocate(sample)
+
+#head(expr_data_t) # just to look
+```
+
+So far everything looks pretty good. The next step is to add a column for the sample type.
+
+Using the command `sub()` I am going to look through the string in the `sample` column and extract everything up to the final underscore and put this in a new column called `type`
+
+```{r add_column}
+library(stringr) # load in library
+
+
+expr_data_t <- expr_data_t %>%
+  mutate(type = sub(".*_(Lung_Cancer|Normal_lung)$", "\\1", sample))
+
+# relocate the type column to be just after the sample
+expr_data_t <- expr_data_t %>%
+  relocate(type, .after = sample)
+
+head(expr_data_t) # just to look
+```
+## Saving the data to local machine
+Please edit the path as necessary
+
+```{r save_data}
+library(readr)
+
+write_tsv(expr_data_t, "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv")
+
+```
+
+
+
