@@ -12,3 +12,38 @@ so the column names could of had a go term analysis done on it to get a list of 
 then you use that list to filter the master tsv files
 just reducing the number of columns to only include transcription factors
 
+
+Reading in the data
+```{r readin}
+library(dplyr) # load necessary libraries
+library(readr)
+
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+
+# load in my data
+expr_data <- read_tsv(pathTiffany)
+```
+
+Next we need to get a list of transcription factor transcripts. 
+
+This can be done using GO term, 
+- do this with biomaRt
+
+```{r Go_list}
+
+```
+
+Following this we will filter the expression matrix to only keep transcription factors
+
+```{r tf_only}
+
+```
+
+Save the filtered matrix
+```{r }
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\tf_filtered.tsv"
+```
