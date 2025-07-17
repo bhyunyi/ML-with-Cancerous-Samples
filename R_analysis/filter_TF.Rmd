@@ -32,7 +32,32 @@ This can be done using GO term,
 - do this with biomaRt
 
 ```{r Go_list}
+library(biomaRt) # instal library
 
+# Lets connect to ensemble
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+#Extract transcript ID's from data, this is from the 4th column onwards
+transcript_ids <- colnames(expr_data)[4:ncol(expr_data)]
+
+# Get GO annotations for the transcript IDs
+go_annotations <- getBM(
+  attributes = c("ensembl_transcript_id", "go_id", "name_1006"),
+  filters = "ensembl_transcript_id",
+  values = transcript_ids,
+  mart = ensembl
+)
+
+# Filter for trancsription factors
+tf_go <- go_annotations %>%
+  filter(grepl("transcription factor", name_1006, ignore.case = TRUE))
+
+# Lets get the list
+expr_data_tf <- expr_data %>%
+  select(1:3, all_of(intersect(colnames(expr_data), tf_transcripts)))
+
+# just to look 
+head(expr_data_tf)
 ```
 
 Following this we will filter the expression matrix to only keep transcription factors
