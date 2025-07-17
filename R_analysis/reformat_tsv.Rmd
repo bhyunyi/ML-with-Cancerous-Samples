@@ -114,6 +114,24 @@ expr_data_t <- expr_data_t[!grepl(paste0("^(", paste(remove_ids, collapse = "|")
 
 head(expr_data_t) 
 ```
+Adding a chunk of code to separate out just the sampleID from the full sample name. 
+
+```{r create_ID}
+# Create ID column by extracting part before first underscore
+# Using sub() like we did earlier
+expr_data_t$ID <- sub("_.*", "", expr_data_t$sample)
+
+# Reorder columns so ID is second
+expr_data_t <- expr_data_t[, c("sample", "ID", setdiff(colnames(expr_data_t), c("sample", "ID")))]
+
+# Remove row names just to clean up the sheet
+rownames(expr_data_t) <- NULL
+
+# Check result
+head(expr_data_t)
+```
+
+
 ## Saving the data to local machine
 Please edit the path as necessary
 
