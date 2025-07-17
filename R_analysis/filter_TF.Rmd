@@ -1,0 +1,25 @@
+---
+title: "Filtering for Transcription Factors"
+author: "Tiffany Tang"
+date: "2025-07-17"
+output: html_document
+---
+
+## Transcription Factor filtering code
+
+In this markdown notebook we will be filtering the reformatted tsv for transcription factors. 
+
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
