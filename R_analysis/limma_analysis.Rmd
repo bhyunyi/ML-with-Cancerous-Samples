@@ -90,6 +90,7 @@ Note that the `echo = FALSE` parameter was added to the code chunk to prevent pr
 Next step is to filter for significant genes that have an adjusted p-value of < 0.05 and a logFC > 1 or < -1
 
 ```{r sig_genes}
+
 # Filter
 sig_genes <- results %>%
   filter(adj.P.Val < 0.05 & abs(logFC) > 1)
@@ -97,24 +98,46 @@ sig_genes <- results %>%
 # Check how many significant genes
 nrow(sig_genes)
 
+
+# Rename the first column so we can work with it
+colnames(sig_genes)[1] <- "GeneID"
+
 # Take a look
 head(sig_genes)
 ```
 There are 2313 significant genes. 
 
+Create a subset of the expression matrix where it is only the significant genes.
+
+```{r sig_matrix}
+# Subset the expression matrix to only include significant genes
+sig_ids <- sig_gene_data$GeneID
+
+# Make sure gene IDs in expr_matrix are rownames
+sig_expr_matrix <- expr_matrix[rownames(expr_matrix) %in% sig_ids, ]
+
+# Add first column name
+
+head(sig_expr_matrix)
+```
+
+Great! 
+
+
 Lets write this out to a file and save it. 
 
 ```{r save_sig_genes}
-# Save our row names
-sig_genes <- sig_genes %>%
-  tibble::rownames_to_column(var = "GeneID")
+library(tibble) 
+# I keep losing the rownames so I need to save them as a column
+sig_expr_df <- as.data.frame(sig_expr_matrix) %>%
+  rownames_to_column(var = "GeneID")
 
 # Please add the path to your variable below
 # outpathBrian <- 
 outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"
 
 # Save the significant genes matrix
-write_tsv(sig_genes, outpathTiffany)
+write_tsv(sig_expr_df, outpathTiffany)
 
 ```
 
