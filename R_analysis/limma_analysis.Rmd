@@ -82,6 +82,30 @@ results <- topTable(fit2, adjust="BH", number=Inf)
 # View results
 head(results)
 ```
+## Visualization
+
+Lets make a volcano plot
+```{r volcano}
+# Load in library
+library(ggplot2)
+
+# Add a column to label significance
+results$Significant <- ifelse(results$adj.P.Val < 0.05 & abs(results$logFC) > 1, "Yes", "No")
+
+# Basic volcano plot
+ggplot(results, aes(x = logFC, y = -log10(adj.P.Val))) +
+  geom_point(aes(color = Significant)) +
+  scale_color_manual(values = c("No" = "gray", "Yes" = "red")) +
+  theme_minimal() +
+  labs(
+    title = "Volcano Plot: Lung Cancer vs Normal Lung",
+    x = "Log2 Fold Change",
+    y = "-Log10 Adjusted P-value"
+  ) +
+  theme(legend.position = "top")
+
+```
+
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
