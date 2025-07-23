@@ -27,12 +27,88 @@ sig_gene_data <- read_tsv(pathTiffany)
 head(sig_gene_data)
 ```
 
-## Including Plots
+## Clustering
 
-You can also embed plots, for example:
+We will be clustering and producing a heatmap
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r heatmap}
+# Load required library
+library(pheatmap)
+
+# Convert GeneID column to rownames
+sig_gene_mat <- sig_gene_data
+rownames(sig_gene_mat) <- sig_gene_mat$GeneID
+sig_gene_mat <- sig_gene_mat[, -which(names(sig_gene_mat) == "GeneID")]
+
+# Convert to matrix for heatmap as pheatmap requires matrix
+sig_gene_mat <- as.matrix(sig_gene_mat)
+
+# Scale the data 
+sig_gene_mat_scaled <- t(scale(t(sig_gene_mat)))
+
+# Generate clustered heatmap
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = FALSE,     # Hide gene names because there are too many
+         show_colnames = TRUE,      # Show sample names
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         main = "Clustering of Significant Genes")
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+We can see based on the heat map that most of the genes are less expressed than its average in the samples. 
+
+I want to add labels for Cancer vs normal on this heat map. To do so I will load in the original expr_data and extract that meta data from there
+
+```{r meta_data}
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+
+# load in my data
+expr_data <- read_tsv(pathTiffany)
+
+head(expr_data)
+
+# list of significant samples
+sig_samples <- colnames(sig_gene_data)[-1]
+
+# Subset expr_data to only rows used in heatmap
+annotation_df <- as.data.frame(expr_data[expr_data$ID %in% sig_samples, c("ID", "type")])
+
+# Make the sample IDs as the rownames
+rownames(annotation_df) <- annotation_df$ID
+
+# Remove the redundant row
+annotation_df <- annotation_df[, "type", drop = FALSE]
+
+# Create another column in this that lets us know if it is a cancer sample or not
+# annotate the heat map based on this
+annotation_df$CancerStatus <- ifelse(grepl("cancer", annotation_df$type, ignore.case = TRUE),
+                                     "Cancer", "Normal")
+
+```
+
+Now we have an annotation dataframe, lets re run the heatmap code
+
+```{r annotate_heatmap}
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_col = annotation_df,
+         main = "Clustering of Significant Genes by Cancer Status")
+
+```
+
+Now we can see that most of the cancer samples have lower expression than the normal samples!
+
+
+

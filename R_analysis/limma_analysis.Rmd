@@ -98,10 +98,6 @@ sig_genes <- results %>%
 # Check how many significant genes
 nrow(sig_genes)
 
-
-# Rename the first column so we can work with it
-colnames(sig_genes)[1] <- "GeneID"
-
 # Take a look
 head(sig_genes)
 ```
@@ -111,7 +107,7 @@ Create a subset of the expression matrix where it is only the significant genes.
 
 ```{r sig_matrix}
 # Subset the expression matrix to only include significant genes
-sig_ids <- sig_gene_data$GeneID
+sig_ids <- rownames(sig_genes)
 
 # Make sure gene IDs in expr_matrix are rownames
 sig_expr_matrix <- expr_matrix[rownames(expr_matrix) %in% sig_ids, ]
