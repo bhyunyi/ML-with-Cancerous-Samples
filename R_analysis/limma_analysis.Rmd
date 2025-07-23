@@ -1,13 +1,13 @@
 ---
-title: "Filtering for Transcription Factors"
+title: "Differential Expression Analysis"
 author: "Tiffany Tang"
 date: "2025-07-17"
 output: html_document
 ---
 
-## Transcription Factor filtering code
+## Differential Expression Analysis code
 
-In this markdown notebook we will be filtering the reformatted tsv for transcription factors. 
+In this markdown notebook we will be performing a differential expression analysis on our genes. 
 
 
 ```{r readin}
@@ -19,6 +19,7 @@ library(readr)
 pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
 
 # load in my data
+# Takes a while to load in
 expr_data <- read_tsv(pathTiffany)
 ```
 
@@ -34,16 +35,18 @@ With limma I want the expression matrix to be:
 So I must reformat the data before this step.
 
 ```{r limma_reshape}
+
 # Extract expression values 
 # First 3 cols are sample, ID, type, so disregard those
 
-expr_matrix <- as.matrix(expr_data_t[, 4:ncol(expr_data_t)])
+expr_matrix <- as.matrix(expr_data[, 4:ncol(expr_data)])
 
 rownames(expr_matrix) <- expr_data$ID  # sample IDs as column names
 
 expr_matrix <- t(expr_matrix)  # Now rows = genes, cols = samples
 
-#head(expr_matrix) # just to look
+head(expr_matrix) # just to look
+# It looks alright
 
 # Alright lets do the meta data
 group <- factor(expr_data$type)  # type
@@ -81,3 +84,32 @@ head(results)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Significant genes
+
+Next step is to filter for significant genes that have an adjusted p-value of < 0.05 and a logFC > 1 or < -1
+
+```{r sig_genes}
+# Filter
+sig_genes <- results %>%
+  filter(adj.P.Val < 0.05 & abs(logFC) > 1)
+
+# Check how many significant genes
+nrow(sig_genes)
+
+# Take a look
+head(sig_genes)
+```
+There are 2313 significant genes. 
+
+Lets write this out to a file and save it. 
+
+```{r save_sig_genes}
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"
+write.csv(sig_genes, outpathTiffany, row.names = TRUE)
+
+```
+
+
