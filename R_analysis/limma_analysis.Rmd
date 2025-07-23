@@ -105,10 +105,16 @@ There are 2313 significant genes.
 Lets write this out to a file and save it. 
 
 ```{r save_sig_genes}
+# Save our row names
+sig_genes <- sig_genes %>%
+  tibble::rownames_to_column(var = "GeneID")
+
 # Please add the path to your variable below
 # outpathBrian <- 
 outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"
-write.csv(sig_genes, outpathTiffany, row.names = TRUE)
+
+# Save the significant genes matrix
+write_tsv(sig_genes, outpathTiffany)
 
 ```
 
