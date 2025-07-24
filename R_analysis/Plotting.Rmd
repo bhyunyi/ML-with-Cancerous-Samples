@@ -155,7 +155,7 @@ Plot with only significant genes that are transcription factors.
 
 ```{r sig_TF_heatmap}
 # Subset the significant gene data to TF-only rows
-sig_TF_data <- sig_gene_data %>% filter(GeneID %in% tf_list)
+sig_TF_data <- as.data.frame(sig_gene_data %>% filter(GeneID %in% tf_list))
 
 # Set rownames and drop GeneID column
 rownames(sig_TF_data) <- sig_TF_data$GeneID
@@ -173,7 +173,7 @@ annotation_df_TF <- annotation_df[colnames(sig_TF_mat_scaled), , drop = FALSE]
 
 # Plot the heatmap
 pheatmap(sig_TF_mat_scaled,
-         show_rownames = TRUE,
+         show_rownames = FALSE,
          show_colnames = TRUE,
          clustering_distance_rows = "euclidean",
          clustering_distance_cols = "euclidean",
@@ -188,3 +188,104 @@ We can see that the trend observed earlier: lower expression in cancer samples c
 
 
 ## PCA Plot
+
+Now we will create the PCA analysis and its corresponding plot. 
+
+```{r sig_genes_pca}
+# set up data for PCA
+sig_pca <- sig_gene_data
+
+# Set col gene ID to the row names and dete
+rownames(sig_pca) <- sig_pca$GeneID
+sig_pca <- sig_pca[, -which(colnames(sig_pca)=="GeneID")]
+
+sig_gene_pca_input<- t(sig_pca)
+
+# Perform PCA
+pca_res <- prcomp(sig_gene_pca_input, scale. = FALSE)
+
+# Make data frame for plotting
+pca_df <- as.data.frame(pca_res$x)
+pca_df$SampleID <- rownames(pca_df)
+
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerStatus <- annotation_df[pca_df$SampleID, "CancerStatus"]
+
+# Plot
+library(ggplot2)
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerStatus)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes",
+       x = paste0("PC1 (", round(summary(pca_res)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_res)$importance[2,2]*100, 1), "%)"))
+
+```
+PCA plot with Cancer type
+```{r pca_cancertype}
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerType <- annotation_df[pca_df$SampleID, "type"]
+
+# Plot
+library(ggplot2)
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerType)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes",
+       x = paste0("PC1 (", round(summary(pca_res)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_res)$importance[2,2]*100, 1), "%)"))
+```
+
+PCA of significant genes that are transcription factors. 
+
+```{r sig_TF_pca}
+# Set data
+sig_tf_pca <- as.data.frame(sig_gene_data %>% filter(GeneID %in% tf_list))
+
+# Set rownames and drop GeneID column
+rownames(sig_tf_pca) <- sig_tf_pca$GeneID
+sig_tf_pca <- sig_tf_pca[, -which(names(sig_tf_pca) == "GeneID")]
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
