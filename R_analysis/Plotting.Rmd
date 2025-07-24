@@ -110,5 +110,43 @@ pheatmap(sig_gene_mat_scaled,
 
 Now we can see that most of the cancer samples have lower expression than the normal samples!
 
+What if we crossed this with the Transcription Factor genes?
+
+```{r tf_sig_heatmap}
+# read in tf only list
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\tfOnly_list.txt"
+
+# load in my data
+tf_list <- read_tsv(pathTiffany, col_names = FALSE)
+#Make it a vector
+tf_list <- tf_list[[1]]
 
 
+# Isolate significant gene IDs
+gene_ids <- sig_gene_data$GeneID
+
+# Create a logical vector indicating TF membership
+is_tf <- gene_ids %in% tf_list
+
+#Create dataframe to mark TF status
+tf_status <- as.data.frame(ifelse(is_tf, "TF", "Non-TF"))
+
+rownames(tf_status) <- rownames(sig_gene_mat_scaled)
+colnames(tf_status) <- "TF_Status"
+
+# Heat map plot code
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = TRUE,
+         show_colnames = FALSE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_row = tf_status,
+         main = "Clustering of Significant Genes")
+
+```
+**I cannot seem to resolve this issue even though nothing is wrong**
