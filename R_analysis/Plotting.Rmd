@@ -150,3 +150,41 @@ pheatmap(sig_gene_mat_scaled,
 
 ```
 **I cannot seem to resolve this issue even though nothing is wrong**
+
+Plot with only significant genes that are transcription factors. 
+
+```{r sig_TF_heatmap}
+# Subset the significant gene data to TF-only rows
+sig_TF_data <- sig_gene_data %>% filter(GeneID %in% tf_list)
+
+# Set rownames and drop GeneID column
+rownames(sig_TF_data) <- sig_TF_data$GeneID
+sig_TF_data <- sig_TF_data[, -which(names(sig_TF_data) == "GeneID")]
+
+# Convert to matrix
+sig_TF_mat <- as.matrix(sig_TF_data)
+
+# Scale the rows (genes)
+sig_TF_mat_scaled <- t(scale(t(sig_TF_mat)))
+
+# Create annotation for samples 
+# Make sure it includes only the relevant samples
+annotation_df_TF <- annotation_df[colnames(sig_TF_mat_scaled), , drop = FALSE]
+
+# Plot the heatmap
+pheatmap(sig_TF_mat_scaled,
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_col = annotation_df_TF,
+         main = "Clustering of Significant Transcription Factor Genes")
+
+```
+We can see that the trend observed earlier: lower expression in cancer samples compared to normal samples—remains evident. This pattern appears to be even more pronounced when focusing specifically on the transcription factor genes.
+
+
+## PCA Plot
