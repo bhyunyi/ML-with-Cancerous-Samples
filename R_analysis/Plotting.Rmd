@@ -133,7 +133,7 @@ is_tf <- gene_ids %in% tf_list
 #Create dataframe to mark TF status
 tf_status <- as.data.frame(ifelse(is_tf, "TF", "Non-TF"))
 
-rownames(tf_status) <- rownames(sig_gene_mat_scaled)
+rownames(tf_status) <- gene_ids
 colnames(tf_status) <- "TF_Status"
 
 # Heat map plot code
@@ -150,6 +150,8 @@ pheatmap(sig_gene_mat_scaled,
 
 ```
 **I cannot seem to resolve this issue even though nothing is wrong**
+
+We will move on from this. 
 
 Plot with only significant genes that are transcription factors. 
 
@@ -241,14 +243,38 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerType)) +
 PCA of significant genes that are transcription factors. 
 
 ```{r sig_TF_pca}
-# Set data
+library(ggplot2)
+
+# Set data, make sure it is only the significant genes that are also transcription factors!
 sig_tf_pca <- as.data.frame(sig_gene_data %>% filter(GeneID %in% tf_list))
 
 # Set rownames and drop GeneID column
 rownames(sig_tf_pca) <- sig_tf_pca$GeneID
+
+# This is an expressiong df of just genes that are transcription factors
 sig_tf_pca <- sig_tf_pca[, -which(names(sig_tf_pca) == "GeneID")]
 
+sig_tf_pca <- t(sig_tf_pca)  # Samples need to be rows
+
+# PCA
+pca_result <- prcomp(sig_tf_pca, center = TRUE, scale. = TRUE)
+
+#Make it a dataframe
+pca_df <- as.data.frame(pca_result$x) 
+pca_df$SampleID <- rownames(pca_df) # Add some rownames
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerType <- annotation_df[pca_df$SampleID, "type"]
+
+
+# Plot
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerType)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes That are Transcription Factors",
+       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*100, 1), "%)"))
 ```
+
 
 
 
