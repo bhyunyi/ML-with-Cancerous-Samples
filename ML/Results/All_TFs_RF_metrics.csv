@@ -1,0 +1,9 @@
+,0
+Best Parameters,"OrderedDict([('criterion', 'entropy'), ('max_depth', 50), ('max_features', 1.0), ('max_samples', 0.9355050593971552), ('min_samples_leaf', 4), ('min_samples_split', 2), ('n_estimators', 1000)])"
+Best Score (CV),0.9437908496732026
+F1 Micro,0.9583333333333334
+AUC Micro,0.9855324074074074
+AUC Breast Cancer,1.0
+AUC Lung Cancer,0.9747899159663865
+AUC Normal Breast,1.0
+AUC Normal Lung,0.984375
