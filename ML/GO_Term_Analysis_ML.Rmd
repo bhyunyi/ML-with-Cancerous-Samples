@@ -1,0 +1,401 @@
+---
+title: "GO Term Analysis for ML Results"
+author: "Bryan Yi"
+date: "2025-07-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## GO Term Analysis of All of the Transcription Factors Used to Train Machine Learning Models
+
+This R markdown code will perform GO term analysis on the list of all TFs used as features for Machine Learning, and each list of the most important TFs for each classification with Logistic Regression and Random Forest models. 
+
+```{r}
+# Imports the necessary libraries for GO Term enrichment
+library(GOstats)
+library(GO.db)
+library(Category)
+library(org.Hs.eg.db)
+library(dplyr) 
+library(readr)
+library(biomaRt)
+```
+
+The code below will first import the master list of TFs that was used as features for our Machine Learning Models and the master list of genes in which the list of TFs came from. 
+
+```{r}
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the TFs
+masterTFs = read.table(file = "tfOnly_list.txt",header = FALSE)
+# Uses the read.table function to import the tsv file containing the count data for all genes in dataset
+master_count_data = read_tsv("transformed_data.tsv")
+# Extracts the gene names that are in the count data
+masterGenes = colnames(master_count_data)
+```
+
+Function to get GO Term enrichment summary table from list of entrez IDs and master gene list. 
+
+```{r}
+# This function will output a summary table of the enriched GO terms of a given set of genes
+GO_Summary = function(gene_list,universe_gene_list){
+  # Creates a new params object for Go term enrichment 
+  params <- new("GOHyperGParams",
+                geneIds = gene_list,                 
+                universeGeneIds = universe_gene_list,   # All genes tested (Entrez IDs)
+                annotation = "org.Hs.eg.db",              # Annotation package
+                ontology = "BP",                          # Biological Process ontology
+                pvalueCutoff = 0.05,                     # p-value threshold
+                testDirection = "over")                   # Over-representation test
+  
+  # Provides the summary of the Go-term enrichment analysis
+  GO_result <- hyperGTest(params)
+  GO_Sum = summary(GO_result)
+  
+  return(GO_Sum)
+  
+}
+```
+
+
+This will convert the ENST ID number for the TFs and the master genes list to Entrez IDs for GO Term analysis.
+```{r}
+# Connect to Ensembl
+ensembl = useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+
+# Convert ENST IDs to Entrez IDs for masterTFs
+conversion_TFs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterTFs,
+                    mart = ensembl)
+# Convert ENST IDs to Entrez IDs for masterGenes
+conversion_genes = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterGenes,
+                    mart = ensembl)
+
+```
+
+This will perform the Go term analysis and output a summary of the enrichment. 
+
+```{r}
+# Defines the masterTfs and masterGenes lists with the entrez ID conversions
+masterTFs_entrez = conversion_TFs[,2]
+masterGenes_entrez = conversion_genes[,2]
+
+# Finds the GO term enrichment summary table of the TFs with all the genes as background.
+GO_TFs_Summary = GO_Summary(masterTFs_entrez,masterGenes_entrez)
+
+print(GO_TFs_Summary)
+```
+
+## GO Term Analysis of Differentially Expressed Genes Used to Train Machine Learning Models
+
+This chunk will import the count data with only the DEGs and isolate the ENST IDs of those DEGs.
+
+```{r}
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the TFs
+DEGs_count_data = read_tsv("DEGs_filtered.tsv")
+# Extracts the column names of the DEGs count data that are ENST IDs
+masterDEGs = colnames(DEGs_count_data)[4:length(colnames(DEGs_count_data))]
+```
+
+This chunk will convert the ENST IDs of the DEGs to Entrez IDs in order to perform GO term enrichment.
+
+```{r}
+# Convert ENST IDs to Entrez IDs for masterDEGs
+conversion_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterDEGs,
+                    mart = ensembl)
+```
+
+This will perform the Go term analysis and output a summary of the enrichment. 
+
+```{r}
+masterDEGs_entrez = conversion_DEGs[,2]
+# Finds the GO term enrichment summary table of 
+GO_DEGs_Summary = GO_Summary(masterDEGs_entrez,masterGenes_entrez)
+
+print(GO_DEGs_Summary)
+```
+
+
+## GO Term Analysis of Important TFs Found by Machine Learning Models
+
+This code chunk will import all of the feature selection results from both Logistic Regression and Random Forest.
+
+```{r}
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results")
+# Uses the read.table function to import the text files
+## Logistic Regression
+BC_logreg = read.csv(file = "Breast_Cancer_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+LC_logreg = read.csv(file = "Lung_Cancer_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+BH_logreg = read.csv(file = "Normal_Breast_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+LH_logreg = read.csv(file = "Normal_lung_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+## Random Forest
+BC_rf = read.csv(file = "Breast_Cancer_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+LC_rf = read.csv(file = "Lung_Cancer_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+BH_rf = read.csv(file = "Normal_Breast_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+LH_rf = read.csv(file = "Normal_lung_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+```
+
+We will then convert all ENST IDs of the selected features into Entrez IDs
+
+```{r}
+# Convert ENST IDs to Entrez IDs for all files
+## Logistic Regression
+conversion_BC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_logreg[,1],
+                    mart = ensembl)
+conversion_LC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_logreg[,1],
+                    mart = ensembl)
+conversion_BH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_logreg[,1],
+                    mart = ensembl)
+conversion_LH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_logreg[,1],
+                    mart = ensembl)
+
+## Random Forest
+conversion_BC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_rf[,2],
+                    mart = ensembl)
+conversion_LC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_rf[,2],
+                    mart = ensembl)
+conversion_BH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_rf[,2],
+                    mart = ensembl)
+conversion_LH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_rf[,2],
+                    mart = ensembl)
+
+```
+
+
+GO Term enrichment of TFs selected by Logistic Regression for Breast Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BC_logreg_Summary = GO_Summary(conversion_BC_logreg[,2],masterTFs_entrez)
+
+print(GO_BC_logreg_Summary)
+
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Lung Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LC_logreg_Summary = GO_Summary(conversion_LC_logreg[,2],masterTFs_entrez)
+
+print(GO_LC_logreg_Summary)
+
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Normal Breast Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BH_logreg_Summary = GO_Summary(conversion_BH_logreg[,2],masterTFs_entrez)
+
+print(GO_BH_logreg_Summary)
+
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Normal Lung Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LH_logreg_Summary = GO_Summary(conversion_LH_logreg[,2],masterTFs_entrez)
+
+print(GO_LH_logreg_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Breast Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BC_rf_Summary = GO_Summary(conversion_BC_rf[,2],masterTFs_entrez)
+
+print(GO_BC_rf_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Lung Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LC_rf_Summary = GO_Summary(conversion_LC_rf[,2],masterTFs_entrez)
+
+print(GO_LC_rf_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Normal Breast Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BH_rf_Summary = GO_Summary(conversion_BH_rf[,2],masterTFs_entrez)
+
+print(GO_BH_rf_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Normal Lung Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LH_rf_Summary = GO_Summary(conversion_LH_rf[,2],masterTFs_entrez)
+
+print(GO_LH_rf_Summary)
+```
+
+
+## GO Term Analysis of Important DEGs Found by Machine Learning Models
+
+This code chunk will import all of the feature selection results from both Logistic Regression and Random Forest.
+
+```{r}
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results")
+# Uses the read.table function to import the text files
+## Logistic Regression
+BC_logreg_DEGs = read.csv(file = "Breast_Cancer_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+LC_logreg_DEGs = read.csv(file = "Lung_Cancer_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+BH_logreg_DEGs = read.csv(file = "Normal_Breast_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+LH_logreg_DEGs = read.csv(file = "Normal_lung_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+## Random Forest
+BC_rf_DEGs = read.csv(file = "Breast_Cancer_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+LC_rf_DEGs = read.csv(file = "Lung_Cancer_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+BH_rf_DEGs = read.csv(file = "Normal_Breast_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+LH_rf_DEGs = read.csv(file = "Normal_lung_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+```
+
+We will then convert all ENST IDs of the selected features into Entrez IDs
+
+```{r}
+# Convert ENST IDs to Entrez IDs for all files
+## Logistic Regression
+conversion_BC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_LC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_BH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_LH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_logreg_DEGs[,1],
+                    mart = ensembl)
+
+## Random Forest
+conversion_BC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_LC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_BH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_LH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_rf_DEGs[,2],
+                    mart = ensembl)
+
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Breast Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BC_logreg_DEGs_Summary = GO_Summary(conversion_BC_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BC_logreg_DEGs_Summary)
+
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Lung Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LC_logreg_DEGs_Summary = GO_Summary(conversion_LC_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LC_logreg_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Normal Breast Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BH_logreg_DEGs_Summary = GO_Summary(conversion_BH_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BH_logreg_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Logistic Regression for Normal Lung Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LH_logreg_DEGs_Summary = GO_Summary(conversion_LH_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LH_logreg_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Breast Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BC_rf_DEGs_Summary = GO_Summary(conversion_BC_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BC_rf_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Lung Cancer Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LC_rf_DEGs_Summary = GO_Summary(conversion_LC_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LC_rf_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Healthy Breast Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_BH_rf_DEGs_Summary = GO_Summary(conversion_BH_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BH_rf_DEGs_Summary)
+```
+
+GO Term enrichment of TFs selected by Random Forest for Healthy Lung Samples
+
+```{r}
+# Obtains the GO term summary table from the created function
+GO_LH_rf_DEGs_Summary = GO_Summary(conversion_LH_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LH_rf_DEGs_Summary)
+```
