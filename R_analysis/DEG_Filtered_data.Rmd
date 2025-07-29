@@ -1,0 +1,44 @@
+---
+title: "DEGs Filtered Data"
+author: "Bryan Yi"
+date: "2025-07-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Filtering the RNA Seq Count Data to only Contain Differentially Expressed Genes. 
+
+This code chunk will import the necessary files to filter the count data. 
+
+```{r}
+library(dplyr) 
+
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the significant DEGs
+sig_genes = read.csv(file = "significant_genes_limma.csv",row.names = 1,header = TRUE)
+# Uses the read.table function to import the tsv file containing the count data for all genes in dataset
+master_count_data = read_tsv("transformed_data.tsv")
+```
+
+The next code chunk will filter the columns of the count data to only contain the DEGs.
+
+```{r}
+# Extracts the row names of sig_genes that contains the actual ENST ID numbers
+sig_gene_names = rownames(sig_genes)
+
+# Filters the intersections between the DEGs and our expression data
+data_filtered = dplyr::select(master_count_data, 1:3, all_of(intersect(colnames(master_count_data), sig_gene_names)))
+```
+
+The next code chunk will export the filtered file to the output directory. 
+
+```{r}
+# Exports the filtered data as a tsv file to the working directory.
+write_tsv(data_filtered, "DEGs_filtered.tsv")
+```
+
+
