@@ -1,0 +1,9 @@
+,0
+Best Parameters,"OrderedDict([('C', 1.0067625431987222), ('max_iter', 1743)])"
+Best Score (CV),0.7607843137254903
+F1 Micro,0.8333333333333334
+AUC Micro,0.9832175925925926
+AUC Breast Cancer,1.0
+AUC Lung Cancer,1.0
+AUC Normal Breast,1.0
+AUC Normal Lung,1.0
