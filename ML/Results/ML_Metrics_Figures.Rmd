@@ -1,0 +1,138 @@
+---
+title: "ML Metrics Figures"
+author: "Bryan Yi"
+date: "2025-07-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Creating Bar Plots Comparing Evaluation Metrics of Logistic Regression and Random Forest for Both Training Data sets
+
+Import the necessary libraries.
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+Import the necessary files that contain the evaluation metrics of the ML training and testing. 
+
+```{r}
+# Creates a list of file paths that contain the evaluation metrics
+files = list.files(path = "/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results/", pattern = paste0(".*metrics\\.csv$"))
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results/")
+
+# Read each CSV into a separate dataframe, and stored in a named list
+data_list <- lapply(files, read_csv)
+# Names each data frame in the list as the file name without the extension
+names(data_list) <- tools::file_path_sans_ext(basename(files))
+```
+
+Compile the micro averaged F1 score and micro averaged AUC of the ML results in separates lists for TFs and DEGs.
+
+```{r}
+# Define empty vectors for micro averaged F1 and AUC to be filled in with the for loop below.
+F1_TFs = c()
+AUC_TFs = c()
+F1_DEGs = c()
+AUC_DEGs = c()
+
+# For loop will loop through the data_list and append F1 and AUC to the empty lists above
+for(f in names(data_list)){
+  data_f = data_list[[f]]
+  
+  if(grepl("TFs",f)){
+    F1 = data_f[3,2]
+    names(F1) = f
+    AUC = data_f[4,2]
+    names(AUC) = f
+    F1_TFs = append(F1_TFs,F1)
+    AUC_TFs = append(AUC_TFs,AUC)
+  } else {
+    F1 = data_f[3,2]
+    names(F1) = f
+    AUC = data_f[4,2]
+    names(AUC) = f
+    F1_DEGs = append(F1_DEGs,F1)
+    AUC_DEGs = append(AUC_DEGs,AUC)
+  }
+}
+
+# unlists the list to make them into regular character vectors
+F1_TFs = unlist(F1_TFs)
+AUC_TFs = unlist(AUC_TFs)
+F1_DEGs = unlist(F1_DEGs)
+AUC_DEGs = unlist(AUC_DEGs)
+
+
+
+```
+
+
+
+```{r}
+# combines the F1 and AUC scores into one vector and changes the values to numeric types
+metrics_TFs = append(F1_TFs,AUC_TFs)
+metrics_TFs = as.numeric(metrics_TFs)
+metrics_DEGs = append(F1_DEGs,AUC_DEGs)
+metrics_DEGs = as.numeric((metrics_DEGs))
+# Creates a vector that contains the names of the metrics in the order of the vectors above
+metric_names = c(rep("F1 Score",2),rep("AUC Score",2))
+# Creates a vector that contains the names of ML models in the order of the vectors above
+ML_names = c("Logistic Regression", "Random Forest", "Logistic Regression", "Random Forest")
+
+# Creates data frame that contains the data needed to plot the metrics for TFs
+plot_TFs_df = data.frame(
+  Metric = metric_names,
+  ML = ML_names,
+  Values = metrics_TFs
+)
+
+# Creates data frame that contains the data needed to plot the metrics for DEGs
+plot_DEGs_df = data.frame(
+  Metric = metric_names,
+  ML = ML_names,
+  Values = metrics_DEGs
+)
+```
+
+
+
+```{r}
+# Plots the TFs data using ggplot
+plot_TFs = ggplot(plot_TFs_df, aes(ML, Values, fill = Metric)) +
+  # Uses the "dodge" setting of geom_bar to show both AUC and F1 score for each ML model
+  geom_bar(stat="identity", position = "dodge") + 
+  scale_x_discrete(labels = c("Logistic Regression", "Random Forest")) +  # Defines the x-axis labels
+  scale_fill_manual(values = c("AUC Score" = "red", "F1 Score" = "blue"))+  # Defines the color of the bars based on metric
+  coord_cartesian(ylim = c(0.9, 1)) + # sets the y axis limits
+  labs(title="Transcription Factor Machine Learning Training Results", x = "ML Model", y = "Evaluation Metric",
+       fill = "Evaluation Metric")
+
+ggsave("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results/TFs_metrics_bar_plot.png", width = 10, height = 6, dpi = 300)
+
+plot_TFs
+```
+
+
+
+```{r}
+# Plots the DEGs data using ggplot
+plot_DEGs = ggplot(plot_DEGs_df, aes(ML, Values, fill = Metric)) +
+  # Uses the "dodge" setting of geom_bar to show both AUC and F1 score for each ML model
+  geom_bar(stat="identity", position = "dodge") + 
+  scale_x_discrete(labels = c("Logistic Regression", "Random Forest")) + # Defines the x-axis labels
+  scale_fill_manual(values = c("AUC Score" = "red", "F1 Score" = "blue"))+  # Defines the color of the bars based on metric
+  coord_cartesian(ylim = c(0.8, 1)) +  # sets the y axis limits
+  labs(title="Differentially Expressed Genes Machine Learning Training Results", x = "ML Model", y = "Evaluation Metric",
+       fill = "Evaluation Metric")
+
+ggsave("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results/DEGs_metrics_bar_plot.png", width = 10, height = 6, dpi = 300)
+
+plot_DEGs
+```
+
