@@ -1,0 +1,1161 @@
+---
+title: "Final Report"
+author: "Tiffany Tang and Bryan Yi"
+date: "2025-08-13"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Code for the Project
+Code to run the nf-core written in shell and run on the HPC.
+
+```{r nf-core}
+#!/bin/bash
+#
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=6
+#SBATCH --time=10:00:00
+#SBATCH --mem=25GB
+#SBATCH --job-name=nf_rnaseq_transcriptomics
+#SBATCH --mail-type=FAIL
+#SBATCH --account=pr_284_general
+#SBATCH --mail-user=by2372@nyu.edu
+
+module purge
+module load nextflow/24.10.4
+
+nextflow run nf-core/rnaseq -r 3.14.0 \
+--input /scratch/by2372/Transcriptomics_Final_Project/nfcore_RNAseq/rnaseq_samplesheet_61_98.csv \
+--outdir res \
+--pseudo_aligner salmon \
+--fasta /scratch/by2372/Transcriptomics_Final_Project/nfcore_RNAseq/hg38_ref/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa.gz \
+--gtf /scratch/by2372/Transcriptomics_Final_Project/nfcore_RNAseq/hg38_ref/Homo_sapiens.GRCh38.113.gtf.gz \
+--extra_salmon_quant_args \"--gcBias\" \
+-profile nyu_hpc \
+--account=pr_284_general \
+-c /scratch/by2372/Transcriptomics_Final_Project/nfcore_RNAseq/rnaseq.config \
+-params-file /scratch/by2372/Transcriptomics_Final_Project/nfcore_RNAseq/rnaseq.json # note: we pass the JSON or YAML file in to nextflow here
+
+module purge
+```
+
+Code to get SRA fastq's written in shell done on the HPC
+
+```{r SRA}
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --time=10:00:00
+#SBATCH --mem=25GB
+#SBATCH --job-name=get_SRAID_fastqs
+#SBATCH --account=pr_284_general
+#SBATCH --mail-user=by2372@nyu.edu
+
+module purge
+module load sra-tools/3.1.0
+
+cd /scratch/by2372/Transcriptomics_Final_Project/SRA_files/
+
+while read sra_id; do
+    mkdir ${sra_id}
+    prefetch "$sra_id" --output-directory /scratch/by2372/Transcriptomics_Final_Project/SRA_files/${sra_id}/
+    fasterq-dump "$sra_id" \
+        --outdir /scratch/by2372/Transcriptomics_Final_Project/SRA_files/${sra_id} \
+        --threads 7
+        
+    pigz -p 7 /scratch/by2372/Transcriptomics_Final_Project/SRA_files/${sra_id}/*_1.fastq
+    pigz -p 7 /scratch/by2372/Transcriptomics_Final_Project/SRA_files/${sra_id}/*_2.fastq
+done < /scratch/by2372/Transcriptomics_Final_Project/SRA_files/SRA_IDs_3.txt
+
+
+module purge
+```
+
+
+Code to reformat the .tsv done in R
+```{r reformat}
+
+# First lets read in the two files. 
+library(readr)
+
+#Please change the paths below as you see fit!
+# path1Brian <- 
+# path2Brian <- 
+
+path1Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv"
+path2Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv"
+
+file1 <- read_tsv(path1Tiffany)
+
+file2 <- read_tsv(path2Tiffany)
+
+# just to look
+head(file1)
+head(file2)
+
+#Before combining I want to make sure that the tx column and the gene_id column are the same for both files
+
+identical(file1$tx, file2$tx) #this outputs true
+
+identical(file1$gene_id, file2$gene_id) # this outputs true
+
+
+library(dplyr) # load necessary library
+
+# I will remove these first two columns from file 2
+file2_trimmed <- file2[, -c(1,2)]
+
+# Combine by columns
+combined <- bind_cols(file1, file2_trimmed)
+
+# check dimensions and output
+dim(combined)
+head(combined)
+
+#First I will separate out the transcription info from the expression data
+transcript_info <- combined[, 1:2] # This is just the first two columns
+
+expr_info <- combined[, -c(1,2)]# Everything except the first two columns
+
+# Transpose
+expr_data_t<- as.data.frame(t(expr_info))
+# head(expr_data_t) # just to look
+
+# add the column names as the transcription id's
+# I am opting to not include the gene id's since we will be including the transcription ID's and only 
+colnames(expr_data_t) <- transcript_info$tx
+#head(expr_data_t) # just to look
+
+# add the sample names as colunms so it's easier to work with
+expr_data_t <- expr_data_t %>%
+  mutate(sample = rownames(expr_data_t)) %>%
+  relocate(sample)
+
+#head(expr_data_t) # just to look
+library(stringr) # load in library
+
+
+expr_data_t <- expr_data_t %>%
+  mutate(type = sub(".*_(Lung_Cancer|Normal_lung|Breast_Cancer|Normal_Breast)$", "\\1", sample))
+
+# relocate the type column to be just after the sample
+expr_data_t <- expr_data_t %>%
+  relocate(type, .after = sample)
+
+head(expr_data_t) # just to look
+# There were 3 lines of data that did not pass Salmon_Quant, we will be removing them from the final data frame. 
+#There were 2 rows of data that failed trimming, we will be removing these as well.
+
+# vector of IDs to remove
+remove_ids <- c("SRR14136790", "SRR14136773", "SRR14136808", "SRR14136821", "SRR14136810")
+
+# Filter out rows where sample starts with any of the remove_ids
+expr_data_t <- expr_data_t[!grepl(paste0("^(", paste(remove_ids, collapse = "|"), ")"), expr_data_t$sample), ]
+
+head(expr_data_t) 
+# Create ID column by extracting part before first underscore
+# Using sub() like we did earlier
+expr_data_t$ID <- sub("_.*", "", expr_data_t$sample)
+
+# Reorder columns so ID is second
+expr_data_t <- expr_data_t[, c("sample", "ID", setdiff(colnames(expr_data_t), c("sample", "ID")))]
+
+# Remove row names just to clean up the sheet
+rownames(expr_data_t) <- NULL
+
+# Check result
+head(expr_data_t)
+library(readr)
+
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+write_tsv(expr_data_t, outpathTiffany)
+```
+
+Code to extract genes that are also transcription factors done in R
+
+```{r filter_TF}
+library(dplyr) # load necessary libraries
+library(readr)
+
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+
+# load in my data
+# This part takes a bit since the file is so large!
+expr_data <- read_tsv(pathTiffany)
+
+library(biomaRt) # install library
+
+# Lets connect to ensemble
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+#Extract transcript ID's from data, this is from the 4th column onwards
+transcript_ids <- colnames(expr_data)[4:ncol(expr_data)]
+
+# head(transcript_ids) # this is just to double check that we are grabbing only transcript IDs
+
+# Get GO annotations for the transcript IDs
+# This part takes a while! around 10 minutes
+go_annotations <- getBM(
+  attributes = c("ensembl_transcript_id", "go_id", "name_1006"),
+  filters = "ensembl_transcript_id",
+  values = transcript_ids,
+  mart = ensembl
+)
+# head(go_annotations) # Just curious and wanted to take a look
+
+# Filter for trancsription factors only!
+# this is a case insensitive search
+tf_go <- go_annotations %>%
+  filter(grepl("transcription factor", name_1006, ignore.case = TRUE))
+
+# Get the list of transcript IDs that are TFs
+tf_transcripts <- tf_go$ensembl_transcript_id
+
+# Lets get the list
+# This filters the intersections between the GO list and our expression data!
+expr_data_tf <- dplyr::select(expr_data, 1:3, all_of(intersect(colnames(expr_data), tf_transcripts)))
+
+
+# just to look 
+head(expr_data_tf)
+
+# first extract just the transcription factor names
+tf_enst_ids <- colnames(expr_data_tf)[4:ncol(expr_data_tf)]
+
+# Write out the lines to a .txt file
+# Please remember to edit the path!
+#outpath_tfBrian <- 
+outpath_tfTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\tfOnly_list.txt"
+
+write(tf_enst_ids, outpath_tfTiffany)
+
+# write out a matrix
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\tf_filtered.tsv"
+
+# Save the filtered TF expression matrix 
+write_tsv(expr_data_tf, outpathTiffany)
+```
+
+Limma analysis code done in R
+
+```{r limma}
+library(dplyr) # load necessary libraries
+library(readr)
+
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+
+# load in my data
+# Takes a while to load in
+expr_data <- read_tsv(pathTiffany)
+
+# Extract expression values 
+# First 3 cols are sample, ID, type, so disregard those
+
+expr_matrix <- as.matrix(expr_data[, 4:ncol(expr_data)])
+
+rownames(expr_matrix) <- expr_data$ID  # sample IDs as column names
+
+expr_matrix <- t(expr_matrix)  # Now rows = genes, cols = samples
+
+head(expr_matrix) # just to look
+# It looks alright
+
+# Alright lets do the meta data
+group <- factor(expr_data$type)  # type
+design <- model.matrix(~0 + group)  # Model matrix for limma
+# +0 removes the intercept, so we get a separate column for each group
+design # Just to take a look, looking alright
+
+# load in necessary libraries
+library(edgeR)
+library(limma)
+
+#used the transposed matrix from earlier
+fit <- lmFit(expr_matrix, design)
+
+# Define contrasts, this is based on the groups in the design matrix
+contrast_matrix <- makeContrasts(
+  Lung_Cancer_vs_Normal = groupLung_Cancer - groupNormal_lung,
+  levels = design
+)
+
+
+# Fit contrast
+fit2 <- contrasts.fit(fit, contrast_matrix)
+fit2 <- eBayes(fit2)
+
+# Get top DE genes
+results <- topTable(fit2, adjust="BH", number=Inf)
+
+# View results
+head(results)
+
+# FIlter for significant genes
+# Filter
+sig_genes <- results %>%
+  filter(adj.P.Val < 0.05 & abs(logFC) > 1)
+
+# Check how many significant genes
+nrow(sig_genes)
+
+# Take a look
+head(sig_genes)
+
+# Subset the expression matrix to only include significant genes
+sig_ids <- rownames(sig_genes)
+
+# Make sure gene IDs in expr_matrix are rownames
+sig_expr_matrix <- expr_matrix[rownames(expr_matrix) %in% sig_ids, ]
+
+# Add first column name
+
+head(sig_expr_matrix)
+
+library(tibble) 
+# I keep losing the rownames so I need to save them as a column
+sig_expr_df <- as.data.frame(sig_expr_matrix) %>%
+  rownames_to_column(var = "GeneID")
+
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"
+
+# Save the significant genes matrix
+write_tsv(sig_expr_df, outpathTiffany)
+```
+
+
+Filter RNA seq count data to only contain differentially expressed genes code done in R
+
+```{r filter DEG}
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the significant DEGs
+sig_genes = read.csv(file = "significant_genes_limma.csv",row.names = 1,header = TRUE)
+# Uses the read.table function to import the tsv file containing the count data for all genes in dataset
+master_count_data = read_tsv("transformed_data.tsv")
+
+# Extracts the row names of sig_genes that contains the actual ENST ID numbers
+sig_gene_names = rownames(sig_genes)
+
+# Filters the intersections between the DEGs and our expression data
+data_filtered = dplyr::select(master_count_data, 1:3, all_of(intersect(colnames(master_count_data), sig_gene_names)))
+
+# Exports the filtered data as a tsv file to the working directory.
+write_tsv(data_filtered, "DEGs_filtered.tsv")
+```
+
+Plotting code done in R
+```{r plot}
+library(dplyr) # load necessary libraries
+library(readr)
+
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"
+
+# load in my data
+# This is for the significant genes!
+sig_gene_data <- read_tsv(pathTiffany)
+
+head(sig_gene_data)
+
+# heatmap clustering
+# Load required library
+library(pheatmap)
+
+# Convert GeneID column to rownames
+sig_gene_mat <- sig_gene_data
+rownames(sig_gene_mat) <- sig_gene_mat$GeneID
+sig_gene_mat <- sig_gene_mat[, -which(names(sig_gene_mat) == "GeneID")]
+
+# Convert to matrix for heatmap as pheatmap requires matrix
+sig_gene_mat <- as.matrix(sig_gene_mat)
+
+# Scale the data 
+sig_gene_mat_scaled <- t(scale(t(sig_gene_mat)))
+
+# Generate clustered heatmap
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = FALSE,     # Hide gene names because there are too many
+         show_colnames = TRUE,      # Show sample names
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         main = "Clustering of Significant Genes")
+
+# add labels to the above heatmap
+# Adjust path variables as needed
+# pathBrian <- 
+pathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+
+# load in my data
+expr_data <- read_tsv(pathTiffany)
+
+head(expr_data)
+
+# list of significant samples
+sig_samples <- colnames(sig_gene_data)[-1]
+
+# Subset expr_data to only rows used in heatmap
+annotation_df <- as.data.frame(expr_data[expr_data$ID %in% sig_samples, c("ID", "type")])
+
+# Make the sample IDs as the rownames
+rownames(annotation_df) <- annotation_df$ID
+
+# Remove the redundant row
+annotation_df <- annotation_df[, "type", drop = FALSE]
+
+# Create another column in this that lets us know if it is a cancer sample or not
+# annotate the heat map based on this
+annotation_df$CancerStatus <- ifelse(grepl("cancer", annotation_df$type, ignore.case = TRUE),
+                                     "Cancer", "Normal")
+
+# Now we have an annotation dataframe, lets re run the heatmap code
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_col = annotation_df,
+         main = "Clustering of Significant Genes by Cancer Status")
+
+# transcription factor genes that are significant
+# Subset the significant gene data to TF-only rows
+sig_TF_data <- as.data.frame(sig_gene_data %>% filter(GeneID %in% tf_list))
+
+# Set rownames and drop GeneID column
+rownames(sig_TF_data) <- sig_TF_data$GeneID
+sig_TF_data <- sig_TF_data[, -which(names(sig_TF_data) == "GeneID")]
+
+# Convert to matrix
+sig_TF_mat <- as.matrix(sig_TF_data)
+
+# Scale the rows (genes)
+sig_TF_mat_scaled <- t(scale(t(sig_TF_mat)))
+
+# Create annotation for samples 
+# Make sure it includes only the relevant samples
+annotation_df_TF <- annotation_df[colnames(sig_TF_mat_scaled), , drop = FALSE]
+
+# Plot the heatmap
+pheatmap(sig_TF_mat_scaled,
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         clustering_distance_rows = "euclidean",
+         clustering_distance_cols = "euclidean",
+         clustering_method = "complete",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_col = annotation_df_TF,
+         main = "Clustering of Significant Transcription Factor Genes")
+
+# PCA plot
+# set up data for PCA
+sig_pca <- sig_gene_data
+
+# Set col gene ID to the row names and dete
+rownames(sig_pca) <- sig_pca$GeneID
+sig_pca <- sig_pca[, -which(colnames(sig_pca)=="GeneID")]
+
+sig_gene_pca_input<- t(sig_pca)
+
+# Perform PCA
+pca_res <- prcomp(sig_gene_pca_input, scale. = FALSE)
+
+# Make data frame for plotting
+pca_df <- as.data.frame(pca_res$x)
+pca_df$SampleID <- rownames(pca_df)
+
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerStatus <- annotation_df[pca_df$SampleID, "CancerStatus"]
+
+# Plot
+library(ggplot2)
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerStatus)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes",
+       x = paste0("PC1 (", round(summary(pca_res)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_res)$importance[2,2]*100, 1), "%)"))
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerType <- annotation_df[pca_df$SampleID, "type"]
+
+# Plot
+library(ggplot2)
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerType)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes",
+       x = paste0("PC1 (", round(summary(pca_res)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_res)$importance[2,2]*100, 1), "%)"))
+
+# PCA of significant genes that are transcription factors
+library(ggplot2)
+
+# Set data, make sure it is only the significant genes that are also transcription factors!
+sig_tf_pca <- as.data.frame(sig_gene_data %>% filter(GeneID %in% tf_list))
+
+# Set rownames and drop GeneID column
+rownames(sig_tf_pca) <- sig_tf_pca$GeneID
+
+# This is an expressiong df of just genes that are transcription factors
+sig_tf_pca <- sig_tf_pca[, -which(names(sig_tf_pca) == "GeneID")]
+
+sig_tf_pca <- t(sig_tf_pca)  # Samples need to be rows
+
+# PCA
+pca_result <- prcomp(sig_tf_pca, center = TRUE, scale. = TRUE)
+
+#Make it a dataframe
+pca_df <- as.data.frame(pca_result$x) 
+pca_df$SampleID <- rownames(pca_df) # Add some rownames
+# Add CancerStatus from annotation_df by rownames
+pca_df$CancerType <- annotation_df[pca_df$SampleID, "type"]
+
+
+# Plot
+ggplot(pca_df, aes(x = PC1, y = PC2, color = CancerType)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA of Significant Genes That are Transcription Factors",
+       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*100, 1), "%)"),
+       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*100, 1), "%)"))
+```
+
+
+Machine leaning code done in python
+
+```{r ML}
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from skopt import BayesSearchCV
+from sklearn.metrics import (auc, roc_curve, roc_auc_score)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import label_binarize
+from sklearn.metrics import f1_score
+from skopt.space import Integer, Real, Categorical
+from imblearn.over_sampling import SMOTE
+from collections import Counter
+
+# Import the data as a data frame with the first column as the index
+
+# Uncomment this if the input is the count data with only TFs
+#df = pd.read_csv('/scratch/by2372/Transcriptomics_Final_Project/ML/tf_filtered.tsv', sep='\t', index_col=0)
+
+# Uncomment this if the input is the count data with only DEGs
+df = pd.read_csv('/scratch/by2372/Transcriptomics_Final_Project/ML/DEGs_filtered.tsv', sep='\t', index_col=0)
+
+# Sets the values of the factors and the output types
+values = df.columns.drop(['ID','type'])
+X = np.array(df[values])
+y = np.array(df['type'])
+
+# Create the train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=5, stratify=y)
+
+pd.Series(y_test).value_counts()
+
+pd.Series(y_train).value_counts()
+
+# Balance the training data using SMOTE
+# Define the SMOTE object for data overbalancing
+smote = SMOTE(random_state=4,k_neighbors = 5)
+
+# Fit a new training data set using SMOTE
+X_SMOTE, y_SMOTE = smote.fit_resample(X_train,y_train)
+# Print out the distribution of the original training y and the new balanced training y
+print("Original class distribution:", Counter(y_train))
+print("Resampled class distribution:", Counter(y_SMOTE))
+
+# Define a Base logistic Regression object
+logreg_obj = LogisticRegression(
+    penalty = 'l1',
+    multi_class = 'multinomial',
+    solver = 'saga',
+    random_state = 5
+)
+
+# Define the search space using skopt's space definition
+logreg_search_space = {
+    'max_iter': Integer(10, 2000),
+    'C': Real(1e-4, 10, prior='log-uniform')
+}
+
+# Define a Bayes Search object for hyperparameter tuning
+logreg_bayes_search = BayesSearchCV(
+    estimator = logreg_obj,
+    search_spaces = logreg_search_space,
+    scoring={'AUC': 'roc_auc_ovr', 'F1': 'f1_micro'}, #Both AUC and F1 score will be kept track of 
+    refit='F1', # F1 score will be used to find the best iteration of hyperparameters
+    n_iter=30, # The search algorithm will run for 20 iterations
+    cv=5,
+    random_state=5,
+    n_jobs=5,
+    verbose=1
+)
+
+logreg_bayes_search.fit(X_SMOTE,y_SMOTE)
+
+# predicted probabilities of test set
+y_logreg_probs = logreg_bayes_search.predict_proba(X_test)
+y_logreg_pred = logreg_bayes_search.predict(X_test)
+
+# Extract optimization history
+logreg_opt_df = pd.DataFrame(logreg_bayes_search.cv_results_)
+
+# Extract the best score and best parameters
+best_score_logreg = logreg_bayes_search.best_score_
+best_params_logreg = logreg_bayes_search.best_params_
+
+# Compute F1 score (treating all classes equally)
+f1_macro_logreg = f1_score(y_test, y_logreg_pred, average='macro')
+f1_weighted_logreg = f1_score(y_test, y_logreg_pred, average='weighted')
+f1_micro_logreg = f1_score(y_test,y_logreg_pred,average = 'micro')
+
+# Displays the best F1 score out of all iterations of the optimization with training data
+best_score_logreg
+
+# Displays the best hyperparameters that resulted in the best F1 score with cross validations of the training data
+best_params_logreg
+
+# Find the unique classifications
+classifications = np.unique(y)
+
+# binarize the classes
+y_test_logreg_bin = label_binarize(y_test, classes=classifications)
+
+fpr = dict()
+tpr = dict()
+roc_auc = dict()
+
+# One vs. rest AUC calculation for multiclass data
+for i in range(len(classifications)):
+    this_class = classifications[i]
+    fpr[this_class], tpr[this_class], _ = roc_curve(y_test_logreg_bin[:, i], y_logreg_probs[:, i])
+    roc_auc[this_class] = auc(fpr[this_class], tpr[this_class])
+    print(f"AUC for class {this_class}: {roc_auc[this_class]:.2f}")
+
+# compute micro-average ROC curve and ROC area
+fpr["micro"], tpr["micro"],_=roc_curve(y_test_logreg_bin.ravel(),y_logreg_probs.ravel())
+roc_auc["micro"] = auc(fpr["micro"],tpr["micro"])
+
+roc_auc["micro"]
+
+# Create a dictionary of metrics
+metrics_dict = {
+    'Best Parameters': [best_params_logreg],
+    'Best Score (CV)': [best_score_logreg],
+    'F1 Micro': [f1_micro_logreg],
+    'AUC Micro': [roc_auc["micro"]],
+    'AUC Breast Cancer': [roc_auc["Breast_Cancer"]],
+    'AUC Lung Cancer': [roc_auc["Lung_Cancer"]],
+    'AUC Normal Breast': [roc_auc["Normal_Breast"]],
+    'AUC Normal Lung': [roc_auc["Normal_lung"]]
+}
+
+# Convert the dictionary into a single dataframe for exporting
+metrics_df = pd.DataFrame.from_dict(metrics_dict, orient='index')
+
+# Create path with csv name then export to csv
+
+# Uncomment this line if the input count data only had TFs
+# metrics_path = "/scratch/by2372/Transcriptomics_Final_Project/ML/Results/All_TFs_Logreg_metrics.csv"
+
+# Uncomment this line if the input count data only had DEGs
+metrics_path = "/scratch/by2372/Transcriptomics_Final_Project/ML/Results/DEGs_Logreg_metrics.csv"
+
+metrics_df.to_csv(metrics_path, index = True)
+
+# Logistic Regression Feature selection 
+# Define the set parameters that were not optimized
+best_params_logreg['penalty'] = 'l1'
+best_params_logreg['multi_class'] = 'multinomial'
+best_params_logreg['solver'] = 'saga'
+best_params_logreg['random_state'] = 5
+
+# Train the logistic regression model with the best parameters 
+final_logreg = LogisticRegression(
+    **best_params_logreg
+)
+
+# Fit the optimized model to the balanced data set
+final_logreg.fit(X_SMOTE, y_SMOTE)
+
+# Get the features and class names
+TFs = np.array(values)
+class_names = final_logreg.classes_
+
+class_coefs = dict()
+
+# Loop through the coefficients of the fitted logreg model
+for i, coefs in enumerate(final_logreg.coef_):
+    class_name_i = class_names[i]  # Align class name with index
+    # Define a dataframe that contains the whole list TFs with associated coefficients for classifying a specific class
+    coef_df = pd.DataFrame({
+        'TF': TFs,
+        'Coefficient': coefs,
+        'Class': class_name_i
+    })
+    # Sort the coefficients in descending order and append just the top 15 to the class_coefs dictionary
+    coef_df = coef_df.sort_values(by = 'Coefficient', ascending = False)
+    top_coef_df = coef_df.head(15)
+    class_coefs[class_name_i] = top_coef_df
+
+# Loop through each dictionary in class_coefs and export to desired directory
+for key in class_coefs.keys():
+    # Uncomment this line if the input count data only had TFs
+    #out_path = f"/scratch/by2372/Transcriptomics_Final_Project/ML/Results/{key}_Logreg_features_TFs.csv"
+    # Uncomment this line if the input count data only had DEGs
+    out_path = f"/scratch/by2372/Transcriptomics_Final_Project/ML/Results/{key}_Logreg_features_DEGs.csv"
+    this_df = class_coefs[key]
+    this_df.to_csv(out_path, index = True)
+
+# Find optimal hyperparameters for random forest
+# Define a Base logistic Regression object
+rf_obj = RandomForestClassifier(
+    bootstrap=True,
+    random_state = 5
+)
+
+# Define the search space using skopt's space definition
+rf_search_space = {
+    'criterion': Categorical(['gini', 'entropy', 'log_loss']),    # Splitting criterion
+    'n_estimators': Integer(10, 1000), # Number of trees
+    'max_depth': Integer(3, 50), # Tree depth
+    'max_features': Real(0.1, 1.0, prior='uniform'), # Fraction of features
+    'min_samples_split': Integer(2, 20), # Min samples to split
+    'min_samples_leaf': Integer(1, 20), # Min samples per leaf 
+    'max_samples': Real(0.1, 1.0, prior='uniform')# Fraction of samples if bootstrap=True
+}
+
+# Define a Bayes Search object for hyperparameter tuning
+rf_search = BayesSearchCV(
+    estimator = rf_obj,
+    search_spaces = rf_search_space,
+    scoring={'AUC': 'roc_auc_ovr', 'F1': 'f1_micro'}, #Both AUC and F1 score will be kept track of 
+    refit='F1', # F1 score will be used to find the best iteration of hyperparameters
+    n_iter=30, # The search algorithm will run for 20 iterations
+    cv=5,
+    random_state=5,
+    n_jobs=5,
+    verbose=1
+)
+
+# Fit the search algorithm to the balanced training data
+rf_search.fit(X_SMOTE,y_SMOTE)
+
+# predicted probabilities of test set
+y_rf_probs = rf_search.predict_proba(X_test)
+y_rf_pred = rf_search.predict(X_test)
+
+# Extract optimization history
+rf_opt_df = pd.DataFrame(rf_search.cv_results_)
+
+# Extract the best score and best parameters
+best_score_rf = rf_search.best_score_
+best_params_rf = rf_search.best_params_
+
+# Compute F1 score (treating all classes equally)
+f1_macro_rf = f1_score(y_test, y_rf_pred, average='macro')
+f1_weighted_rf = f1_score(y_test, y_rf_pred, average='weighted')
+f1_micro_rf = f1_score(y_test,y_rf_pred,average = 'micro')
+
+# Displays the best F1 score out of all iterations of the optimization with training data
+best_score_rf
+
+
+# Displays the best hyperparameters that resulted in the best F1 score with cross validations of the training data
+best_params_rf
+
+# Find the unique classifications
+classifications = np.unique(y)
+
+# binarize the classes
+y_test_rf_bin = label_binarize(y_test, classes=classifications)
+
+fpr_rf = dict()
+tpr_rf = dict()
+roc_auc_rf = dict()
+
+# One vs. rest AUC calculation for multiclass data
+for i in range(len(classifications)):
+    this_class = classifications[i]
+    fpr_rf[this_class], tpr_rf[this_class], _ = roc_curve(y_test_rf_bin[:, i], y_rf_probs[:, i])
+    roc_auc_rf[this_class] = auc(fpr_rf[this_class], tpr_rf[this_class])
+    print(f"AUC for class {this_class}: {roc_auc_rf[this_class]:.2f}")
+
+# compute micro-average ROC curve and ROC area
+fpr_rf["micro"], tpr_rf["micro"],_=roc_curve(y_test_rf_bin.ravel(),y_rf_probs.ravel())
+roc_auc_rf["micro"] = auc(fpr_rf["micro"],tpr_rf["micro"])
+
+roc_auc_rf["micro"]
+
+# Create a dictionary of metrics
+metrics_dict_rf = {
+    'Best Parameters': [best_params_rf],
+    'Best Score (CV)': [best_score_rf],
+    'F1 Micro': [f1_micro_rf],
+    'AUC Micro': [roc_auc_rf["micro"]],
+    'AUC Breast Cancer': [roc_auc_rf["Breast_Cancer"]],
+    'AUC Lung Cancer': [roc_auc_rf["Lung_Cancer"]],
+    'AUC Normal Breast': [roc_auc_rf["Normal_Breast"]],
+    'AUC Normal Lung': [roc_auc_rf["Normal_lung"]]
+}
+
+# Convert the dictionary into a single dataframe for exporting
+metrics_rf_df = pd.DataFrame.from_dict(metrics_dict_rf, orient='index')
+
+# Create path with csv name then export to csv
+
+# Uncomment this line if the input count data only had TFs
+#metrics_path_rf = "/scratch/by2372/Transcriptomics_Final_Project/ML/Results/All_TFs_RF_metrics.csv"
+# Uncomment this line if the input count data only had DEGs
+metrics_path_rf = "/scratch/by2372/Transcriptomics_Final_Project/ML/Results/DEGs_RF_metrics.csv"
+metrics_rf_df.to_csv(metrics_path_rf, index = True)
+
+# Random forest feature selection with best Hyperparameters
+# Define the set parameters that were not optimized
+best_params_rf['bootstrap'] = True
+best_params_rf['random_state'] = 5
+
+def rf_feature_selection(X_train,y_train,class_name,TF_names,best_params):
+    
+    y_train_new = [1 if x == class_name else 0 for x in y_train]
+
+    # Train Random Forest
+    rf = RandomForestClassifier(
+            **best_params_rf
+        )
+    rf.fit(X_train,y_train_new)
+
+    importances = rf.feature_importances_
+    importances_df = pd.DataFrame({'Feature': TF_names, 'Importance': importances, 'Class': class_name})
+
+    # Rank features by importance
+    importances_df = importances_df.sort_values(by='Importance', ascending=False).reset_index()
+
+    # Select top 15 features
+    top_TFs = importances_df[:15]
+    
+    # Uncomment this line if the input count data only had TFs
+    #out_path = f"/scratch/by2372/Transcriptomics_Final_Project/ML/Results/{class_name}_Randfor_features_TFs.csv"
+    # Uncomment this line if the input count data only had DEGs
+    out_path = f"/scratch/by2372/Transcriptomics_Final_Project/ML/Results/{class_name}_Randfor_features_DEGs.csv"
+    top_TFs.to_csv(out_path, index = True)
+    
+for name in classifications:
+    rf_feature_selection(X_SMOTE,y_SMOTE,name,TFs,best_params_rf)
+    
+```
+
+
+GO term analysis code done in R
+
+```{r go term}
+# Imports the necessary libraries for GO Term enrichment
+library(GOstats)
+library(GO.db)
+library(Category)
+library(org.Hs.eg.db)
+library(dplyr) 
+library(readr)
+library(biomaRt)
+
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the TFs
+masterTFs = read.table(file = "tfOnly_list.txt",header = FALSE)
+# Uses the read.table function to import the tsv file containing the count data for all genes in dataset
+master_count_data = read_tsv("transformed_data.tsv")
+# Extracts the gene names that are in the count data
+masterGenes = colnames(master_count_data)
+
+# This function will output a summary table of the enriched GO terms of a given set of genes
+GO_Summary = function(gene_list,universe_gene_list){
+  # Creates a new params object for Go term enrichment 
+  params <- new("GOHyperGParams",
+                geneIds = gene_list,                 
+                universeGeneIds = universe_gene_list,   # All genes tested (Entrez IDs)
+                annotation = "org.Hs.eg.db",              # Annotation package
+                ontology = "BP",                          # Biological Process ontology
+                pvalueCutoff = 0.05,                     # p-value threshold
+                testDirection = "over")                   # Over-representation test
+  
+  # Provides the summary of the Go-term enrichment analysis
+  GO_result <- hyperGTest(params)
+  GO_Sum = summary(GO_result)
+  
+  return(GO_Sum)
+  
+# Connect to Ensembl
+ensembl = useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+
+# Convert ENST IDs to Entrez IDs for masterTFs
+conversion_TFs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterTFs,
+                    mart = ensembl)
+# Convert ENST IDs to Entrez IDs for masterGenes
+conversion_genes = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterGenes,
+                    mart = ensembl)
+
+# Defines the masterTfs and masterGenes lists with the entrez ID conversions
+masterTFs_entrez = conversion_TFs[,2]
+masterGenes_entrez = conversion_genes[,2]
+
+# Finds the GO term enrichment summary table of the TFs with all the genes as background.
+GO_TFs_Summary = GO_Summary(masterTFs_entrez,masterGenes_entrez)
+
+print(GO_TFs_Summary)
+
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
+# Uses the read.table function to import the text file containing the TFs
+DEGs_count_data = read_tsv("DEGs_filtered.tsv")
+# Extracts the column names of the DEGs count data that are ENST IDs
+masterDEGs = colnames(DEGs_count_data)[4:length(colnames(DEGs_count_data))]
+
+# Convert ENST IDs to Entrez IDs for masterDEGs
+conversion_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = masterDEGs,
+                    mart = ensembl)
+
+masterDEGs_entrez = conversion_DEGs[,2]
+# Finds the GO term enrichment summary table of 
+GO_DEGs_Summary = GO_Summary(masterDEGs_entrez,masterGenes_entrez)
+
+print(GO_DEGs_Summary)
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results")
+# Uses the read.table function to import the text files
+## Logistic Regression
+BC_logreg = read.csv(file = "Breast_Cancer_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+LC_logreg = read.csv(file = "Lung_Cancer_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+BH_logreg = read.csv(file = "Normal_Breast_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+LH_logreg = read.csv(file = "Normal_lung_Logreg_features_TFs.csv",row.names = 1,header = TRUE)
+## Random Forest
+BC_rf = read.csv(file = "Breast_Cancer_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+LC_rf = read.csv(file = "Lung_Cancer_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+BH_rf = read.csv(file = "Normal_Breast_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+LH_rf = read.csv(file = "Normal_lung_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
+
+
+# Convert ENST IDs to Entrez IDs for all files
+## Logistic Regression
+conversion_BC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_logreg[,1],
+                    mart = ensembl)
+conversion_LC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_logreg[,1],
+                    mart = ensembl)
+conversion_BH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_logreg[,1],
+                    mart = ensembl)
+conversion_LH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_logreg[,1],
+                    mart = ensembl)
+
+## Random Forest
+conversion_BC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_rf[,2],
+                    mart = ensembl)
+conversion_LC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_rf[,2],
+                    mart = ensembl)
+conversion_BH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_rf[,2],
+                    mart = ensembl)
+conversion_LH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_rf[,2],
+                    mart = ensembl)
+
+# Obtains the GO term summary table from the created function
+GO_BC_logreg_Summary = GO_Summary(conversion_BC_logreg[,2],masterTFs_entrez)
+
+print(GO_BC_logreg_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_LC_logreg_Summary = GO_Summary(conversion_LC_logreg[,2],masterTFs_entrez)
+
+print(GO_LC_logreg_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_BH_logreg_Summary = GO_Summary(conversion_BH_logreg[,2],masterTFs_entrez)
+
+print(GO_BH_logreg_Summary)
+# Obtains the GO term summary table from the created function
+GO_LH_logreg_Summary = GO_Summary(conversion_LH_logreg[,2],masterTFs_entrez)
+
+print(GO_LH_logreg_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_BC_rf_Summary = GO_Summary(conversion_BC_rf[,2],masterTFs_entrez)
+
+print(GO_BC_rf_Summary)
+# Obtains the GO term summary table from the created function
+GO_LC_rf_Summary = GO_Summary(conversion_LC_rf[,2],masterTFs_entrez)
+
+print(GO_LC_rf_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_BH_rf_Summary = GO_Summary(conversion_BH_rf[,2],masterTFs_entrez)
+
+print(GO_BH_rf_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_LH_rf_Summary = GO_Summary(conversion_LH_rf[,2],masterTFs_entrez)
+
+print(GO_LH_rf_Summary)
+
+# Sets the working directory to the path containing the text files
+setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results")
+# Uses the read.table function to import the text files
+## Logistic Regression
+BC_logreg_DEGs = read.csv(file = "Breast_Cancer_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+LC_logreg_DEGs = read.csv(file = "Lung_Cancer_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+BH_logreg_DEGs = read.csv(file = "Normal_Breast_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+LH_logreg_DEGs = read.csv(file = "Normal_lung_Logreg_features_DEGs.csv",row.names = 1,header = TRUE)
+## Random Forest
+BC_rf_DEGs = read.csv(file = "Breast_Cancer_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+LC_rf_DEGs = read.csv(file = "Lung_Cancer_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+BH_rf_DEGs = read.csv(file = "Normal_Breast_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+LH_rf_DEGs = read.csv(file = "Normal_lung_Randfor_features_DEGs.csv",row.names = 1,header = TRUE)
+
+# Convert ENST IDs to Entrez IDs for all files
+## Logistic Regression
+conversion_BC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_LC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_BH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_logreg_DEGs[,1],
+                    mart = ensembl)
+conversion_LH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_logreg_DEGs[,1],
+                    mart = ensembl)
+
+## Random Forest
+conversion_BC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BC_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_LC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LC_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_BH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = BH_rf_DEGs[,2],
+                    mart = ensembl)
+conversion_LH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
+                    filters = "ensembl_transcript_id",
+                    values = LH_rf_DEGs[,2],
+                    mart = ensembl)
+
+# Go term enrichment of TFs selected by logistic regression for breast cancer samples
+# Obtains the GO term summary table from the created function
+GO_BC_logreg_DEGs_Summary = GO_Summary(conversion_BC_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BC_logreg_DEGs_Summary)
+
+# Lung cancer samples
+# Obtains the GO term summary table from the created function
+GO_LC_logreg_DEGs_Summary = GO_Summary(conversion_LC_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LC_logreg_DEGs_Summary)
+
+# Normal breast
+# Obtains the GO term summary table from the created function
+GO_BH_logreg_DEGs_Summary = GO_Summary(conversion_BH_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BH_logreg_DEGs_Summary)
+
+# Normal lung
+# Obtains the GO term summary table from the created function
+GO_LH_logreg_DEGs_Summary = GO_Summary(conversion_LH_logreg_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LH_logreg_DEGs_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_BC_rf_DEGs_Summary = GO_Summary(conversion_BC_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BC_rf_DEGs_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_LC_rf_DEGs_Summary = GO_Summary(conversion_LC_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LC_rf_DEGs_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_BH_rf_DEGs_Summary = GO_Summary(conversion_BH_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_BH_rf_DEGs_Summary)
+
+# Obtains the GO term summary table from the created function
+GO_LH_rf_DEGs_Summary = GO_Summary(conversion_LH_rf_DEGs[,2],masterDEGs_entrez)
+
+print(GO_LH_rf_DEGs_Summary)
+```
+
+
+
+
+
+
+
+
+```
+
+
+
+
+}
+
+
+
+
+
+
+
