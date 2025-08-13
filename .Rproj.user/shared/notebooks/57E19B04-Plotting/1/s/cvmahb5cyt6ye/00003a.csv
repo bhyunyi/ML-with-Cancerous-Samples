@@ -1,0 +1,15 @@
+"0","# Heat map plot code
+pheatmap(sig_gene_mat_scaled,
+         show_rownames = TRUE,
+         show_colnames = FALSE,
+         clustering_distance_rows = ""euclidean"",
+         clustering_distance_cols = ""euclidean"",
+         clustering_method = ""complete"",
+         fontsize_row = 6,
+         fontsize_col = 10,
+         annotation_row = tf_status,
+         main = ""Clustering of Significant Genes"")
+"
+"2","Error in annotation_colors[[colnames(annotation)[i]]] : 
+  subscript out of bounds
+"

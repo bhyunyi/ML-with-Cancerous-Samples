@@ -1,0 +1,30 @@
+"0","# First lets read in the two files. "
+"0","library(readr)"
+"0",""
+"0","#Please change the paths below as you see fit!"
+"0","# path1Brian <- "
+"0","# path2Brian <- "
+"0",""
+"0","path1Tiffany <- ""C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv"""
+"0","path2Tiffany <- ""C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv"""
+"0",""
+"0","file1 <- read_tsv(path1Tiffany)"
+"2","[1mRows: [22m[34m386676[39m [1mColumns: [22m[34m62[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────[39m
+[1mDelimiter:[22m ""\t""
+[31mchr[39m  (2): tx, gene_id
+[32mdbl[39m (60): SRR14136764_Lung_Cancer, SRR14136768_Normal_lung, SRR141..."
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","file2 <- read_tsv(path2Tiffany)"
+"2","[1mRows: [22m[34m386676[39m [1mColumns: [22m[34m40[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────[39m
+[1mDelimiter:[22m ""\t""
+[31mchr[39m  (2): tx, gene_id
+[32mdbl[39m (38): SRR14136826_Normal_lung, SRR14136828_Normal_lung, SRR318..."
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","# just to look"
+"0","head(file1)"

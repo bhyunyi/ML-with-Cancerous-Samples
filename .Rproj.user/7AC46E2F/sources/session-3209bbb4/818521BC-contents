@@ -1,0 +1,149 @@
+---
+title: "Adjust File Format for Analysis"
+author: "Tiffany Tang"
+date: "2025-07-16"
+output: html_document
+---
+
+## Reformatting code
+
+The code below will be used to reformat the tsv files from the nf_core pipeline. 
+Pathways may need to be edited for personal use. 
+- the two tsv files are downloaded onto my personal computer and are not in the GitHub!
+
+```{r readin}
+# First lets read in the two files. 
+library(readr)
+
+#Please change the paths below as you see fit!
+# path1Brian <- 
+# path2Brian <- 
+
+path1Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_1_60.tsv"
+path2Tiffany <- "C:/Users/tiffa/OneDrive/Desktop/Masters in Bioinformatics/Transcriptomics/Final/salmon.merged.transcript_tpm_61_98.tsv"
+
+file1 <- read_tsv(path1Tiffany)
+
+file2 <- read_tsv(path2Tiffany)
+
+# just to look
+head(file1)
+head(file2)
+```
+
+Great. Both of these files look good. 
+The next step would be combining the two into one file to work with.
+
+```{r combine_files}
+#Before combining I want to make sure that the tx column and the gene_id column are the same for both files
+
+identical(file1$tx, file2$tx) #this outputs true
+
+identical(file1$gene_id, file2$gene_id) # this outputs true
+
+
+library(dplyr) # load necessary library
+
+# I will remove these first two columns from file 2
+file2_trimmed <- file2[, -c(1,2)]
+
+# Combine by columns
+combined <- bind_cols(file1, file2_trimmed)
+
+# check dimensions and output
+dim(combined)
+head(combined)
+```
+
+Fantastic. So far it is looking good!
+The next step is now to transpose this data so the rows are the samples.
+
+**I will not be including the geneID's in the final data frame**
+- this is to keep the final data frame cleaner
+- we will also be using the transcription information for downstream analysis, not the geneIDs
+
+```{r transpose_data}
+#First I will separate out the transcription info from the expression data
+transcript_info <- combined[, 1:2] # This is just the first two columns
+
+expr_info <- combined[, -c(1,2)]# Everything except the first two columns
+
+# Transpose
+expr_data_t<- as.data.frame(t(expr_info))
+# head(expr_data_t) # just to look
+
+# add the column names as the transcription id's
+# I am opting to not include the gene id's since we will be including the transcription ID's and only 
+colnames(expr_data_t) <- transcript_info$tx
+#head(expr_data_t) # just to look
+
+# add the sample names as colunms so it's easier to work with
+expr_data_t <- expr_data_t %>%
+  mutate(sample = rownames(expr_data_t)) %>%
+  relocate(sample)
+
+#head(expr_data_t) # just to look
+```
+
+So far everything looks pretty good. The next step is to add a column for the sample type.
+
+Using the command `sub()` I am going to look through the string in the `sample` column and extract everything up to the final underscore and put this in a new column called `type`
+
+```{r add_column}
+library(stringr) # load in library
+
+
+expr_data_t <- expr_data_t %>%
+  mutate(type = sub(".*_(Lung_Cancer|Normal_lung|Breast_Cancer|Normal_Breast)$", "\\1", sample))
+
+# relocate the type column to be just after the sample
+expr_data_t <- expr_data_t %>%
+  relocate(type, .after = sample)
+
+head(expr_data_t) # just to look
+```
+There were 3 lines of data that did not pass Salmon_Quant, we will be removing them from the final data frame. 
+There were 2 rows of data that failed trimming, we will be removing these as well.
+
+```{r remove_failed}
+# vector of IDs to remove
+remove_ids <- c("SRR14136790", "SRR14136773", "SRR14136808", "SRR14136821", "SRR14136810")
+
+# Filter out rows where sample starts with any of the remove_ids
+expr_data_t <- expr_data_t[!grepl(paste0("^(", paste(remove_ids, collapse = "|"), ")"), expr_data_t$sample), ]
+
+head(expr_data_t) 
+```
+Adding a chunk of code to separate out just the sampleID from the full sample name. 
+
+```{r create_ID}
+# Create ID column by extracting part before first underscore
+# Using sub() like we did earlier
+expr_data_t$ID <- sub("_.*", "", expr_data_t$sample)
+
+# Reorder columns so ID is second
+expr_data_t <- expr_data_t[, c("sample", "ID", setdiff(colnames(expr_data_t), c("sample", "ID")))]
+
+# Remove row names just to clean up the sheet
+rownames(expr_data_t) <- NULL
+
+# Check result
+head(expr_data_t)
+```
+
+
+## Saving the data to local machine
+Please edit the path as necessary
+
+```{r save_data}
+library(readr)
+
+# Please add the path to your variable below
+# outpathBrian <- 
+outpathTiffany <- "C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"
+write_tsv(expr_data_t, outpathTiffany)
+
+```
+
+
+

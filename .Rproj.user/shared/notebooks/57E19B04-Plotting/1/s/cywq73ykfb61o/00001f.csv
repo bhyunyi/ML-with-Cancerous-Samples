@@ -1,0 +1,33 @@
+"0","library(dplyr) # load necessary libraries"
+"2","
+Attaching package: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(readr)"
+"0",""
+"0","# Adjust path variables as needed"
+"0","# pathBrian <- "
+"0","pathTiffany <- ""C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\significant_genes_limma.csv"""
+"0",""
+"0","# load in my data"
+"0","# This is for the significant genes!"
+"0","sig_gene_data <- read_tsv(pathTiffany)"
+"2","[1mRows: [22m[34m2313[39m [1mColumns: [22m[34m94[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m ""\t""
+[31mchr[39m  (1): GeneID
+[32mdbl[39m (93): SRR14136764, SRR14136768, SRR14136769, SRR14136770, SRR14136771, SRR14136772, SRR14136774, SRR14136775, SRR14136776, SRR14136777, SRR14136778, SRR14136779,..."
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","head(sig_gene_data)"

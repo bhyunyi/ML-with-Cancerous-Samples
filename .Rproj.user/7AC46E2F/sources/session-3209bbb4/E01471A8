@@ -1,0 +1,27 @@
+{
+    "id": "E01471A8",
+    "path": "~/ML-with-Cancerous-Samples/R_analysis/Plotting.Rmd",
+    "project_path": "R_analysis/Plotting.Rmd",
+    "type": "r_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1753284408997.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "275,3",
+        "scrollLine": "271"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1753466266,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1753466266540,
+    "read_only": false,
+    "read_only_alternatives": []
+}
