@@ -1,7 +1,0 @@
-"0","library(readr)"
-"0",""
-"0","# Please add the path to your variable below"
-"0","# outpathBrian <- "
-"0","outpathTiffany <- ""C:\\Users\\tiffa\\OneDrive\\Desktop\\Masters in Bioinformatics\\Transcriptomics\\Final\\transformed_data.tsv"""
-"0","write_tsv(expr_data_t, outpathTiffany)"
-"0",""

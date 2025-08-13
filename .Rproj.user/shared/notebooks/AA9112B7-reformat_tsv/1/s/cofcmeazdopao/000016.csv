@@ -1,7 +1,0 @@
-"0","# vector of IDs to remove"
-"0","remove_ids <- c(""SRR14136790"", ""SRR14136773"", ""SRR14136808"", ""SRR14136821"", ""SRR14136810"")"
-"0",""
-"0","# Filter out rows where sample starts with any of the remove_ids"
-"0","expr_data_t <- expr_data_t[!grepl(paste0(""^("", paste(remove_ids, collapse = ""|""), "")""), expr_data_t$sample), ]"
-"0",""
-"0","head(expr_data_t) "
