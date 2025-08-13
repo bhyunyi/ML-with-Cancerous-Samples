@@ -5,13 +5,124 @@ date: "2025-08-13"
 output: html_document
 ---
 
-## R Markdown
+# Machine Learning Model for Predicting Transcriptomic Signatures of Various Cancers
+## By Tiffany Tang and Bryan Yi
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+**Abstract**
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Accurate classification of cancerous versus healthy tissue is essential for early diagnosis and effective treatment. We aimed to create a cancer classification model that can be generalized to multiple types of cancers in different tissues and organs. In this study, we evaluated whether transcription factor (TF) expression alone is sufficient to distinguish between cancerous and normal tissue across human breast and human lung tissue. We curated publicly available bulk RNA-seq datasets from the NCBI Sequence Read Archive, processed them using the nf-core/rnaseq pipeline with Salmon, and filtered the expression matrix to retain only TF genes. Differential expression analysis was performed using the limma package in R, taking advantage of its suitability for normalized data and small sample sizes. Dimensionality reduction techniques, including hierarchical clustering and principal component analysis (PCA), were applied to visualize sample relationships and assess the separation of cancer and normal tissue types.
+
+To further evaluate predictive power, we trained machine learning models (Logistic Regression and Random Forest) on both differentially expressed genes (DEGs) and the full TF expression matrix. Hyperparameters were optimized via Bayesian optimization, and performance was assessed using F1 and AUC scores. Feature importance rankings were extracted and analyzed through Gene Ontology (GO) enrichment to explore functional relevance.
+
+Our results showed that tissue type is the primary driver of transcriptomic variation, and TF expression patterns alone do not provide complete separation of cancer and normal samples. Machine learning models achieved strong classification performance and identified biologically meaningful features. These findings support the potential of TF-focused transcriptomic profiling for cancer classification and biomarker discovery, given careful curation of the input TFs that allow for prominent model focus on disease state rather than tissue type. 
+
+**Introduction**
+
+Accurate classification of cancerous versus healthy tissue is critical for improving diagnostic precision and guiding effective treatments. Transcription factors (TFs) are key regulators of gene expression and cellular identity, and their dysregulation is a hallmark of many cancers (Lambert et al., 2018; Bradner et al., 2017). Previous studies have shown that TF expression patterns can distinguish between cell types and disease states, highlighting their potential use in cancer diagnostics (Cahan et al., 2014; Szklarczyk et al., 2021). However, most classification efforts rely on broad gene expression profiles, which may introduce noise and increase computational complexity. By focusing only on TFs, we can reduce data dimensionality while retaining biologically meaningful signals that differentiate healthy from malignant cells (Aibar et al., 2017; Vaquerizas et al., 2009).
+
+In this study, we investigate whether TF expression data alone can reliably distinguish between healthy and cancerous tissue samples from multiple tissue types. We curated a dataset of publicly available bulk RNA-seq samples from the NCBI Sequence Read Archive (SRA), selecting well-annotated breast and lung samples with balanced representation across tissue and disease states. RNA-seq reads were processed using the nf-core/rnaseq pipeline with Salmon, a fast transcript quantification tool that estimates gene expression levels without full alignments. We filtered the resulting expression matrix to retain only transcripts corresponding to known human TFs.
+
+We hypothesized that TF expression profiles would be sufficient to distinguish between cancer types and accurately differentiate cancerous from healthy tissue. We expected this separation to be evident through hierarchical clustering and principal component analysis (PCA), with diseased and healthy samples forming distinct clusters. We also expected the top 15 most important features identified by machine learning for the diseased classes to share similar GO term enrichment and gene functions, and likewise for the healthy classes.
+
+**Methods**
+
+Publicly available bulk RNA sequencing data was obtained from the NCBI Sequence Read Archive (SRA). Lung cancer and normal lung tissue samples were sourced from BioProject PRJNA719412. Breast cancer samples were obtained from BioProjects PRJNA1202516, PRJNA1253793, and PRJNA1241313, while normal breast tissue samples were curated from PRJNA1241313 and PRJNA1224764. We ensured a balanced design by including an equal number of samples across the four conditions: healthy lung, cancerous lung, healthy breast, and cancerous breast.
+
+Relevant SRA ID numbers were recorded into a single column of a text file. This text file was called upon in a batch script that utilized the SRA toolkit to download all of the FASTq files associated with each SRA ID. The FASTq files were compressed using the gzip command for more optimal data storage. Next, we constructed two sample sheets that had columns for the sample name, file path of the first FASTq file for the corresponding sample, file path of the second FASTq file, and the strandedness of the reads. Two sheets were constructed to break up the number of samples to run through the RNA sequencing pipeline at one time. Next, we ran a batch script for the nf-core/rnaseq pipeline version 3.14.0, which performs quality control, trimming, and transcript quantification using Salmon. We made sure to correctly call the path to the reference sequence FASTa file and GTF file. We also called for GC-bias correction via the Salmon pseudoaligner. Samples that failed quality control or quantification steps were excluded from downstream analysis.
+
+After alignment and quantification, transcript-level abundance data was reformatted in R. For machine learning purposes, the data was formatted with the columns containing the genes and the rows containing the sample names. A separate column was added for the classification or label for each sample or row. The classifications were “Breast Cancer”, “Lung Cancer”, “Normal Breast”, and “Normal Lung”. Using the biomaRt package, we retrieved a list of known human transcription factors based on gene annotations. The gene annotations had to contain the words “transcription factor” to be included in the final list. The gene expression matrix was then filtered to retain only transcription factor genes, and saved as a separate tsv file for further analysis.
+
+Differential gene expression analysis was performed using the limma package in R, which applies linear modeling and empirical Bayes methods to improve statistical power, particularly in datasets with small sample sizes. Since our RNA-seq data were already normalized by the nf-core pipeline, we selected limma over count-based models like DESeq2. The analysis contrasted cancerous versus healthy samples within each tissue type, identifying differentially expressed transcription factors (TFs). Genes with an adjusted p-value < 0.05 were considered statistically significant, and the resulting set of significant genes was saved as a separate .tsv file for downstream analyses. In addition to DE analysis, we used unsupervised methods including hierarchical clustering and principal component analysis (PCA) to assess overall expression patterns and explore how samples grouped based on tissue and disease status.
+
+Gene Ontology (GO) term enrichment analysis was performed in R and was used to interpret the biological significance of the top transcription factors and differentially expressed genes identified through statistical analysis and machine learning. GO enrichment identifies biological processes, molecular functions, or cellular components that are statistically overrepresented in a gene list. The Gene Ontology framework provides a structured vocabulary that enables cross-species comparisons and helps contextualize gene sets in terms of their biological roles. By grouping genes into shared functions, enrichment analysis reduces complexity and allows for insights into the molecular mechanisms driving observed expression patterns. GO enrichment plots were visualized as horizontal bar plots, with the top ten statistically significant GO terms on the y-axis and gene counts associated with each term on the x-axis.
+
+To visualize expression patterns and explore sample relationships, we generated heatmaps and performed principal component analysis (PCA) in R. Heatmaps were created to display hierarchical clustering of gene expression, while PCA results were plotted using ggplot2 as scatter plots to assess sample separation based on tissue type and disease state. Heatmaps were used to display hierarchical clustering of gene expression across samples, helping identify patterns of co-expression and potential groupings by disease or tissue type. Two heatmaps were generated: one for all significant genes and one for significant genes that were transcription factors only. Heatmaps offer a visual summary of high-dimensional gene expression data and can highlight subsets of genes with shared regulatory behavior. PCA was performed on both the full set of significant genes and the transcription factor subset to assess how samples clustered based on tissue and disease state. As an unsupervised dimensionality reduction method, PCA helps identify the major sources of variance in the data and can reveal whether the expression profiles naturally separate by biological condition.
+
+To classify samples by tissue and disease status, we trained and evaluated two machine learning models: Logistic Regression and Random Forest. These models were applied to gene expression data filtered for either transcription factors (TFs) or statistically significant differentially expressed genes (DEGs). The data were processed in a Python Jupyter Notebook and split into training and testing sets using scikit-learn’s train_test_split function, with 75 percent of the data used for training and 25 percent for testing. Due to class imbalance, the Synthetic Minority Over-sampling Technique (SMOTE) was applied to balance the training data. SMOTE generated synthetic samples by selecting a data point, identifying its five nearest neighbors within the same class, and interpolating new samples between the original point and its neighbors (Chawla et al., 2002). This approach ensured that each of the four classes had 22 training samples.
+
+Bayesian optimization was used to fine-tune hyperparameters for both models. For Logistic Regression, we optimized the max_iter and C parameters while keeping the penalty set to L1 and the solver as saga. For Random Forest, we optimized several parameters including criterion, n_estimators, max_depth, max_features, min_samples_split, min_samples_leaf, and max_samples, with bootstrap set to True. In both cases, optimization was guided by the best micro-averaged F1 score on validation data, and Area Under the Curve (AUC) scores were also recorded.
+
+Model performance was evaluated using micro-averaged F1 score and AUC. The F1 score is the harmonic mean of precision and recall, measuring the model’s ability to detect and correctly classify positive samples (GeeksforGeeks, 2023). AUC, calculated from the Receiver Operating Characteristic (ROC) curve, quantifies the model’s ability to distinguish between classes, where a score of 1.0 indicates perfect separation and 0.5 indicates random performance (GeeksforGeeks, 2020). Micro-averaging aggregates metrics across all classes by treating each prediction equally, making it suitable for multiclass problems (GeeksforGeeks, 2023).
+
+The optimal hyperparameters were then used to train final models for feature selection. For Logistic Regression, the coefficients for each gene in the training data were extracted and sorted to identify the top 15 features contributing to classification in each class (Sperandei, 2014). For Random Forest, feature importances were calculated in a one-versus-rest approach. Since Random Forest does not provide class-specific importance scores in multiclass classification, the labels were recorded such that the class of interest was labeled as one and all others as zero. This process was repeated for each class to extract the top features (Dutta et al., 2021). The selected features from both models were exported as CSV files and analyzed in R to generate Gene Ontology (GO) enrichment plots.
+
+**Results**
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 131555.png)
+
+*Figure 1. Heatmap Clustering of Significant Genes by Cancer Status*
+
+
+This heatmap visualizes the clustering of significant gene expression profiles across samples annotated by cancer status and tissue type. Each column represents a sample, and each row represents a gene. The color gradient from blue to yellow indicates relative gene expression levels, with blue representing lower expression and yellow higher expression. Samples are annotated by both cancer status (cancer vs. normal) and type (breast or lung tissue, with subgroups for cancer and normal). Clear clusters form, suggesting distinct gene expression patterns between cancer and normal tissues, particularly evident in the separation between cancer and normal in the top annotation. There is also a clear distinction between the Lung Cancer samples and the normal lung sample, but less so between the Breast Cancer and Normal Breast samples, although there are still groupings of each. We can see that while most of the samples in the heat map show reduced gene expression,a number of samples in the Normal Lung cluster show slightly elevated expression levels . 
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 132346.png)
+
+*Figure 2. Heatmap Clustering of Significant Transcription Factor Genes.* 
+
+This heatmap shows the clustering of samples based on the expression of significant genes that are transcription factor (TF), annotated by cancer status and tissue type as well. Again, each column corresponds to a sample, while each row represents a transcription factor gene. Color intensity reflects gene expression levels, with blue indicating lower expression and yellow to red indicating higher expression. The dendrogram suggests moderate clustering by cancer status, with many cancer samples grouped together, but some intermixing is evident,especially among Breast Cancer and Normal Breast samples, which was also seen in the previous heat map. In this clustering we can see that there is some intermingling between Normal Lung samples and Lung Cancer samples, which was not present when clustered by only significant genes. The majority of the heatmap shows gene expression with a few samples in the Normal Lung cluster exhibiting increased gene expression (also seen in the previous heat map).
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 133803.png)
+
+*Figure 3. PCA of Significant Genes by Cancer Status*
+
+This PCA plot shows the separation of samples based on the expression of significant genes, with samples labeled by cancer type. Principal Component 1 (PC1), which explains 99.7% of the variance, primarily distinguishes between tissue types (breast and lung) along the x-axis. The tight clustering of Breast Cancer and Normal Breast on the far left suggests minimal variation between these groups in terms of the major variance captured by PC1, while Lung Cancer and Normal Lung show greater dispersion along both PC1 and PC2. Notably, PC2 (accounting for 0.2% of the variance) captures more of the separation between cancer and normal samples within each tissue type. Overall, the dominant source of variation (PC1) appears to reflect tissue-specific gene expression, while the subtler variation along PC2 may reflect differences due to cancer status.
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 134112.png)
+
+*Figure 4. PCA of Significant Genes that are Transcription Factors*
+
+This PCA plot shows the clustering of samples based on the expression of significant transcription factor genes, grouped by cancer type. The four sample types generally cluster near each other, with some overlap. Principal Component 1 (PC1), which explains 39% of the variance, does not clearly distinguish between Normal Breast and Breast Cancer, but it does separate Lung Cancer from Normal Lung to some extent. However, PC1 also struggles to distinguish Lung Cancer from both breast sample types. Principal Component 2 (PC2), which explains 11% of the variance, has limited ability to separate lung samples but provides better distinction between Normal Breast and Breast Cancer, as well as from the lung samples. 
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 134122.png)
+
+*Figure 5. Top 10 Enriched GO Terms For All Transcription Factors*
+
+The GO term enrichment results for the 5758 transcription factors are shown in Figure 5. The enriched GO terms are as expected since the top ten functions and processes have to do with transcription and gene expression. Each function that has to do with transcription regulation, RNA polymerase II, or gene expression have well over 1500 genes associated with it. This demonstrates that we were successful in properly isolating the transcription factors in the gene expression matrix for use in downstream machine learning models. 
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 134240.png)
+
+*Figure 6. Top 10 Enriched GO Terms for Significant Differentially Expressed Genes*
+
+The enriched GO terms for the 2313 significant differentially expressed genes found from the Limma analysis are shown in Figure 6. Many of the enriched GO terms mainly have to do with basic cell movement processes like migration, locomotion, and motility. The top two enriched GO terms have to do with multicellular organism process and development which means that many of the differentially expressed genes influence the way that cells mobilize to differentiate and form different organs in the body. 
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 134249.png)
+
+*Figure 7. Evaluation Metrics of the Machine Learning Models Trained with TFs*
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 134307.png)
+
+*Figure 8. Evaluation Metrics of the Machine Learning Models Trained with DEGs*
+
+Figure 7 shows the microaveraged AUC and F1 score of the Logistic Regression and Random Forest models trained with the expression values of TFs. These evaluation metrics were calculated using the testing data. Logistic regression had a slightly higher AUC score of 0.991, while Random Forest had an AUC score of 0.985. Both models had identical F1 scores of 0.958. Figure 8 shows the same two metrics, but with the two models being trained with the DEGs instead of the TFs. The microaveraged AUC scores for Logistic Regression and Random Forest were 0.983 and 0.973 respectively. This time, Random Forest had the higher F1 score of 0.917, while Logistic Regression had an F1 score of 0.833. Although these scores are slightly higher when the models are trained with TFs, they demonstrate powerful classification strength in both models when they are trained with both gene sets. 
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 135843.png)
+
+*Figure 9. Feature Selection of the Logistic Regression Model Trained with Transcription Factors*
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 135852.png)
+
+*Figure 10. Feature Selection of the Random Forest Model Trained with Transcription Factors*
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 135858.png)
+
+*Figure 11. Feature Selection of the Logistic Regression Model Trained with Differentially Expressed Genes*
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 135905.png)
+
+*Figure 12. Feature Selection of the Random Forest Model Trained with Differentially Expressed Genes*
+
+Figures 9, 10, 11, and 12 show the top 15 features in classifying each tissue and disease state for the two machine learning models and two sets of training data. When looking at the top features for the instances of the Random Forest Model being trained with TFs or DEGs, all of the top genes are unique between the classifications. For example, the top features for the breast cancer and lung cancer classifications have no gene symbols in common. This is also true when comparing the top genes on a tissue type basis, whether it be comparing the top genes of breast cancer with that of healthy breast, or lung cancer with that of healthy lung. When comparing the outcomes of the two instances of Logistic Regression Model training, the model trained with TFs had HSPB1 and PTMA show up for breast cancer and lung cancer classifications. The breast cancer classification also had S100A8 as a top gene whereas the lung cancer classification also had S100A9 which is of the same family as S100A8. In the same model, the breast cancer and healthy breast classifications had more gene symbols in common. These were XBP1, RPS3, PPIA, and YWHAZ. Between the lung tissue classifications, JUNB and JUN were the two genes in common. When Logistic Regression was trained with DEGs, there were much less genes in common between the classifications. For example, the cancerous classification only had MUC1 in common, the breast tissue classifications only had MT-CO1 in common, and the lung tissue classifications had MT-ATP8 in common. 
+
+Each of the top feature lists were also analyzed to produce 16 GO term enrichment plots that can be found in Appendix A. When looking at the GO term enrichments for the top features given by the Logitistic Regression model trained with TFs, the tissue classifications had much more similar enrichments than the disease state classifications. For example, breast cancer and healthy breast classes had a significant enrichment in processes involving cell death or apoptosis. The lung tissue classifications mainly had GO terms associated with responses to stress, chemical, and other outside stimulus. These plots can be seen in Figures A1 to A4 in Appendix A. When looking at the plots for the Random Forest model trained with TFs, there does not seem to be a clear pattern when comparing the GO term enrichments. Breast and Lung cancer classes do not have any top GO terms in common, and this is consistent with the tissue classes as well. However, the breast cancer classification shows terms that are consistent with functions and processes that could be affected by tumorigenesis. For example, functions like cell proliferation and tissue development. The healthy lung class also has functions that are in line with lung tissue, such as respiratory tube development, and lung development. It is also important to note that some of the top enrichment terms seem to be unfit for the classification it is under. For example, one of the top functions that are enrichment for the breast cancer class is respiratory system development when you would expect that for the lung tissue classes. Glial cell and astrocyte development functions are also enriched for the healthy breast class when you would expect to see these in a classification of tissue from the nervous system or brain. Figures A5 to A8 in Appendix A show these plots for Random Forest trained with TFs. 
+
+Similar patterns were shown with the GO term enrichment plots for the machine learning models trained with the DEGs. For example, the Logistic Regression model trained with DEGs gave top features that had similar functions between the tissue classifications. The breast cancer and healthy breast classes were enriched for genes related to oxidative phosphorylation, ATP synthesis, and electron transport. The GO term enrichments for the top features with Random Forest were largely unrelated to each other. 
+
+**Discussion**
 
 ## Code for the Project
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
 Code to run the nf-core written in shell and run on the HPC.
 
 ```{r nf-core}
@@ -1140,20 +1251,56 @@ print(GO_LH_rf_DEGs_Summary)
 ```
 
 
+**References**
+
+Aibar, S., et al. (2017). SCENIC: single-cell regulatory network inference and clustering. Nature Methods, 14(11), 1083–1086. https://doi.org/10.1038/nmeth.4463
 
 
+Bradner, J.E., Hnisz, D., & Young, R.A. (2017). Transcriptional addiction in cancer. Cell, 168(4), 629–643. https://doi.org/10.1016/j.cell.2016.12.013
 
 
+Cahan, P., et al. (2014). CellNet: Network biology applied to stem cell engineering. Cell, 158(4), 903–915. https://doi.org/10.1016/j.cell.2014.07.020
 
 
-```
+Chawla, N. V., Bowyer, K. W., Hall, L. O., & Kegelmeyer, W. P. (2002). SMOTE: Synthetic Minority Over-sampling Technique. Journal of Artificial Intelligence Research, 16(16), 321–357. https://doi.org/10.1613/jair.953
+
+Dutta, P., Paul, S., & Kumar, A. (2021). Comparative analysis of various supervised machine learning techniques for diagnosis of COVID-19. Elsevier EBooks, 521–540. https://doi.org/10.1016/b978-0-323-85172-5.00020-4
+
+GeeksforGeeks. (2023, December 27). F1 Score in Machine Learning. GeeksforGeeks. https://www.geeksforgeeks.org/machine-learning/f1-score-in-machine-learning/
+
+GeeksforGeeks. (2020, November 25). AUC ROC Curve in Machine Learning. GeeksforGeeks. https://www.geeksforgeeks.org/machine-learning/auc-roc-curve/
+
+Lambert, S.A., et al. (2018). The human transcription factors. Cell, 172(4), 650–665. https://doi.org/10.1016/j.cell.2018.01.029
+
+National Center for Biotechnology Information. "SRA – Sequence Read Archive." NCBI, U.S. National Library of Medicine, https://www.ncbi.nlm.nih.gov/sra/. Accessed 8 July 2025.
+
+Sperandei, S. (2014). Understanding Logistic Regression Analysis. Biochemia Medica, 24(1), 12–18. https://doi.org/10.11613/bm.2014.003
 
 
+Szklarczyk, D., et al. (2021). The STRING database in 2021: customizable protein–protein networks, and functional characterization of user-uploaded gene/measurement sets. Nucleic Acids Research, 49(D1), D605–D612. https://doi.org/10.1093/nar/gkaa1074
 
 
-}
+Vaquerizas, J.M., et al. (2009). A census of human transcription factors: function, expression and evolution. Nature Reviews Genetics, 10(4), 252–263. https://doi.org/10.1038/nrg2538
 
+Wang, Q., Zhu, W., Xiao, G., Ding, M., Chang, J., & Liao, H. (2020). Effect of AGER on the biological behavior of non‑small cell lung cancer H1299 cells. Molecular Medicine Reports, 22(2), 810–818. https://doi.org/10.3892/mmr.2020.11176
 
+**Appendix A: GO Term Enrichment Plots**
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 140735.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 140801.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 140839.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 140910.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 141515.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 141523.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 141606.png)
+
+![](C:\\Users\\tiffa\\OneDrive\\Pictures\\Screenshots\\Screenshot 2025-08-13 141636.png)
 
 
 
