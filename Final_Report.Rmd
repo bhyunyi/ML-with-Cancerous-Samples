@@ -119,6 +119,18 @@ Similar patterns were shown with the GO term enrichment plots for the machine le
 
 **Discussion**
 
+The heatmaps and PCA plots collectively suggest that gene expression patterns differ more strongly by tissue type than by cancer status, particularly when considering all significant genes. Lung Cancer and Normal Lung samples show clearer separation compared to the overlapping patterns seen in Breast Cancer and Normal Breast, indicating that cancer-associated expression changes are more pronounced in lung tissue. While transcription factors also contribute to these differences, the second heatmap and PCA plot reveal weaker separation, especially between lung cancer and normal lung samples. These results partially support our hypothesis: while TF expression alone achieved high classification accuracy, the dominant signal reflected tissue-specific differences rather than cancer status. Overall, TF-based models can reliably distinguish cancer from healthy samples, but they appear to capture primarily tissue-driven expression patterns rather than universal cancer-specific signatures.
+
+The consistently high micro-averaged AUC and F1 scores from all trained models indicate that they sufficiently differentiated between all classes and successfully distinguished healthy from cancerous samples. Models trained with DEGs had slightly lower scores than the models trained with TFs, suggesting that TFs are the optimal choice for cancer classification models. Feature selection results of the trained models suggest that they were preferentially distinguishing samples based on expression differences amongst tissue types rather than disease status. This is apparent in the enriched GO terms, where features from samples of the same tissue type were more similar than those from samples with the same disease status. However, the models seemed to capture unique patterns beyond tissue type since isoforms of the AGER gene were selected for only the healthy lung class in all models. The consistent identification of this gene as an important biomarker for only the healthy lung class suggests that the models are capable of capturing unique markers that are not tissue specific. Further refining the TF feature space may enhance their ability to meet our goals.
+
+In summary, our analyses show that while TF-based models can achieve high accuracy in distinguishing cancer from healthy samples, the primary signal they capture is driven by tissue identity. Nevertheless, the consistent identification of potential biomarkers such as AGER indicates that TF expression contains unique, non–tissue-specific patterns that warrant further exploration.
+
+One limitation of this analysis is that the breast cancer and normal breast samples were sourced from multiple BioProjects (three for breast cancer and two for normal breast), whereas all lung samples came from a single BioProject. This discrepancy introduces the potential for batch effects and technical variability that could obscure true biological differences, particularly in breast tissue comparisons. This may explain why the heatmaps show a clearer separation between lung cancer and normal lung samples, but less distinction between breast cancer and normal breast samples. Additionally, although Synthetic Minority Over-sampling Technique (SMOTE) was applied to balance class sizes, the original sample sizes per class were relatively small (only 30 per group). Synthetic oversampling may not fully represent the biological complexity and heterogeneity of real samples, potentially limiting the generalizability of the machine learning models. Finally, despite using Bayesian optimization and cross-validation for hyperparameter tuning, complex models such as Random Forest may still be prone to overfitting, especially given the limited size of the training dataset.
+
+Future work could involve training machine learning models on a simplified binary classification task distinguishing only between diseased and healthy samples, without separating by tissue type. This approach may reveal broader transcriptomic signatures of cancer across tissues. Additionally, identifying the top 100 most important features for both breast cancer and lung cancer classes, then focusing model training exclusively on the intersecting features, could help isolate core transcription factor biomarkers shared between cancer types. This strategy may improve model generalizability and uncover universal cancer-associated regulatory mechanisms.
+
+
+
 ## Code for the Project
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(eval = FALSE)
@@ -986,7 +998,6 @@ for name in classifications:
 
 
 GO term analysis code done in R
-
 ```{r go term}
 # Imports the necessary libraries for GO Term enrichment
 library(GOstats)
@@ -996,6 +1007,8 @@ library(org.Hs.eg.db)
 library(dplyr) 
 library(readr)
 library(biomaRt)
+library(ggplot2)
+library(stringr)
 
 # Sets the working directory to the path containing the text files
 setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project")
@@ -1006,8 +1019,8 @@ master_count_data = read_tsv("transformed_data.tsv")
 # Extracts the gene names that are in the count data
 masterGenes = colnames(master_count_data)
 
-# This function will output a summary table of the enriched GO terms of a given set of genes
-GO_Summary = function(gene_list,universe_gene_list){
+# This function will output a summary plot of the enriched GO terms of a given set of genes
+GO_Summary = function(gene_list,universe_gene_list,gene_source){
   # Creates a new params object for Go term enrichment 
   params <- new("GOHyperGParams",
                 geneIds = gene_list,                 
@@ -1021,8 +1034,25 @@ GO_Summary = function(gene_list,universe_gene_list){
   GO_result <- hyperGTest(params)
   GO_Sum = summary(GO_result)
   
-  return(GO_Sum)
+  # Convert the summary to a data frame, order based on Pvalue, and only take the top ten. 
+  GO_Sum_df = as.data.frame(GO_Sum)
+  GO_top_df = GO_Sum_df[order(GO_Sum_df$Pvalue), ][1:10, ]
+  GO_top_df$Term <- str_wrap(GO_top_df$Term, width = 40)  # Adjust width 
   
+  GO_plot = ggplot(GO_top_df, aes(x = reorder(Term, Count), y = Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = paste0("Top 10 Enriched GO Terms"," For ", gene_source),
+       x = "GO Term",
+       y = "Gene Count") +
+  theme(axis.text.y = element_text(size = 10)) +
+  theme( plot.title = element_text(size = 14, hjust = 0.5),
+    plot.margin = margin(t = 30, r = 10, b = 10, l = 10))
+  
+  return(GO_plot)
+  
+}
 # Connect to Ensembl
 ensembl = useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
 
@@ -1042,7 +1072,7 @@ masterTFs_entrez = conversion_TFs[,2]
 masterGenes_entrez = conversion_genes[,2]
 
 # Finds the GO term enrichment summary table of the TFs with all the genes as background.
-GO_TFs_Summary = GO_Summary(masterTFs_entrez,masterGenes_entrez)
+GO_TFs_Summary = GO_Summary(masterTFs_entrez,masterGenes_entrez, "All \nTranscription Factors")
 
 print(GO_TFs_Summary)
 
@@ -1061,9 +1091,11 @@ conversion_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id")
 
 masterDEGs_entrez = conversion_DEGs[,2]
 # Finds the GO term enrichment summary table of 
-GO_DEGs_Summary = GO_Summary(masterDEGs_entrez,masterGenes_entrez)
+GO_DEGs_Summary = GO_Summary(masterDEGs_entrez,masterGenes_entrez,"\nSignificant DEGs")
 
 print(GO_DEGs_Summary)
+
+
 # Sets the working directory to the path containing the text files
 setwd("/Users/b.hyunyi/Desktop/Transcriptomics/Final_Project/ML/Results")
 # Uses the read.table function to import the text files
@@ -1078,79 +1110,80 @@ LC_rf = read.csv(file = "Lung_Cancer_Randfor_features_TFs.csv",row.names = 1,hea
 BH_rf = read.csv(file = "Normal_Breast_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
 LH_rf = read.csv(file = "Normal_lung_Randfor_features_TFs.csv",row.names = 1,header = TRUE)
 
-
 # Convert ENST IDs to Entrez IDs for all files
 ## Logistic Regression
 conversion_BC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BC_logreg[,1],
+                    values = BC_logreg[,2],
                     mart = ensembl)
 conversion_LC_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LC_logreg[,1],
+                    values = LC_logreg[,2],
                     mart = ensembl)
 conversion_BH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BH_logreg[,1],
+                    values = BH_logreg[,2],
                     mart = ensembl)
 conversion_LH_logreg = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LH_logreg[,1],
+                    values = LH_logreg[,2],
                     mart = ensembl)
 
 ## Random Forest
 conversion_BC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BC_rf[,2],
+                    values = BC_rf[,3],
                     mart = ensembl)
 conversion_LC_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LC_rf[,2],
+                    values = LC_rf[,3],
                     mart = ensembl)
 conversion_BH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BH_rf[,2],
+                    values = BH_rf[,3],
                     mart = ensembl)
 conversion_LH_rf = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LH_rf[,2],
+                    values = LH_rf[,3],
                     mart = ensembl)
 
 # Obtains the GO term summary table from the created function
-GO_BC_logreg_Summary = GO_Summary(conversion_BC_logreg[,2],masterTFs_entrez)
+GO_BC_logreg_Summary = GO_Summary(conversion_BC_logreg[,2],masterTFs_entrez,"\nTFs-Trained Log Reg Features \nfor Breast Cancer")
 
 print(GO_BC_logreg_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_LC_logreg_Summary = GO_Summary(conversion_LC_logreg[,2],masterTFs_entrez)
+GO_LC_logreg_Summary = GO_Summary(conversion_LC_logreg[,2],masterTFs_entrez,"\nTFs-Trained Log Reg Features \nfor Lung Cancer")
 
 print(GO_LC_logreg_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_BH_logreg_Summary = GO_Summary(conversion_BH_logreg[,2],masterTFs_entrez)
+GO_BH_logreg_Summary = GO_Summary(conversion_BH_logreg[,2],masterTFs_entrez,"\nTFs-Trained Log Reg Features \nfor Healthy Breast")
 
 print(GO_BH_logreg_Summary)
+
 # Obtains the GO term summary table from the created function
-GO_LH_logreg_Summary = GO_Summary(conversion_LH_logreg[,2],masterTFs_entrez)
+GO_LH_logreg_Summary = GO_Summary(conversion_LH_logreg[,2],masterTFs_entrez,"\nTFs-Trained Log Reg Features \nfor Healthy Lung")
 
 print(GO_LH_logreg_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_BC_rf_Summary = GO_Summary(conversion_BC_rf[,2],masterTFs_entrez)
+GO_BC_rf_Summary = GO_Summary(conversion_BC_rf[,2],masterTFs_entrez,"\nTFs-Trained Rand For Features \nfor Breast Cancer")
 
 print(GO_BC_rf_Summary)
+
 # Obtains the GO term summary table from the created function
-GO_LC_rf_Summary = GO_Summary(conversion_LC_rf[,2],masterTFs_entrez)
+GO_LC_rf_Summary = GO_Summary(conversion_LC_rf[,2],masterTFs_entrez,"\nTFs-Trained Rand For Features \nfor Lung Cancer")
 
 print(GO_LC_rf_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_BH_rf_Summary = GO_Summary(conversion_BH_rf[,2],masterTFs_entrez)
+GO_BH_rf_Summary = GO_Summary(conversion_BH_rf[,2],masterTFs_entrez,"\nTFs-Trained Rand For Features \nfor Healthy Breast")
 
 print(GO_BH_rf_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_LH_rf_Summary = GO_Summary(conversion_LH_rf[,2],masterTFs_entrez)
+GO_LH_rf_Summary = GO_Summary(conversion_LH_rf[,2],masterTFs_entrez,"\nTFs-Trained Rand For Features \nfor Healthy Lung")
 
 print(GO_LH_rf_Summary)
 
@@ -1172,84 +1205,81 @@ LH_rf_DEGs = read.csv(file = "Normal_lung_Randfor_features_DEGs.csv",row.names =
 ## Logistic Regression
 conversion_BC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BC_logreg_DEGs[,1],
+                    values = BC_logreg_DEGs[,2],
                     mart = ensembl)
 conversion_LC_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LC_logreg_DEGs[,1],
+                    values = LC_logreg_DEGs[,2],
                     mart = ensembl)
 conversion_BH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BH_logreg_DEGs[,1],
+                    values = BH_logreg_DEGs[,2],
                     mart = ensembl)
 conversion_LH_logreg_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LH_logreg_DEGs[,1],
+                    values = LH_logreg_DEGs[,2],
                     mart = ensembl)
 
 ## Random Forest
 conversion_BC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BC_rf_DEGs[,2],
+                    values = BC_rf_DEGs[,3],
                     mart = ensembl)
 conversion_LC_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LC_rf_DEGs[,2],
+                    values = LC_rf_DEGs[,3],
                     mart = ensembl)
 conversion_BH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = BH_rf_DEGs[,2],
+                    values = BH_rf_DEGs[,3],
                     mart = ensembl)
 conversion_LH_rf_DEGs = getBM(attributes = c("ensembl_transcript_id", "entrezgene_id"),
                     filters = "ensembl_transcript_id",
-                    values = LH_rf_DEGs[,2],
+                    values = LH_rf_DEGs[,3],
                     mart = ensembl)
 
-# Go term enrichment of TFs selected by logistic regression for breast cancer samples
+
 # Obtains the GO term summary table from the created function
-GO_BC_logreg_DEGs_Summary = GO_Summary(conversion_BC_logreg_DEGs[,2],masterDEGs_entrez)
+GO_BC_logreg_DEGs_Summary = GO_Summary(conversion_BC_logreg_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Log Reg Features \nfor Breast Cancer")
 
 print(GO_BC_logreg_DEGs_Summary)
 
-# Lung cancer samples
 # Obtains the GO term summary table from the created function
-GO_LC_logreg_DEGs_Summary = GO_Summary(conversion_LC_logreg_DEGs[,2],masterDEGs_entrez)
+GO_BC_logreg_DEGs_Summary = GO_Summary(conversion_BC_logreg_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Log Reg Features \nfor Breast Cancer")
 
-print(GO_LC_logreg_DEGs_Summary)
+print(GO_BC_logreg_DEGs_Summary)
 
-# Normal breast
 # Obtains the GO term summary table from the created function
-GO_BH_logreg_DEGs_Summary = GO_Summary(conversion_BH_logreg_DEGs[,2],masterDEGs_entrez)
+GO_BH_logreg_DEGs_Summary = GO_Summary(conversion_BH_logreg_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Log Reg Features \nfor Healthy Breast")
 
 print(GO_BH_logreg_DEGs_Summary)
 
-# Normal lung
 # Obtains the GO term summary table from the created function
-GO_LH_logreg_DEGs_Summary = GO_Summary(conversion_LH_logreg_DEGs[,2],masterDEGs_entrez)
+GO_LH_logreg_DEGs_Summary = GO_Summary(conversion_LH_logreg_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Log Reg Features \nfor Healthy Lung")
 
 print(GO_LH_logreg_DEGs_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_BC_rf_DEGs_Summary = GO_Summary(conversion_BC_rf_DEGs[,2],masterDEGs_entrez)
+GO_BC_rf_DEGs_Summary = GO_Summary(conversion_BC_rf_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Rand For Features \nfor Breast Cancer")
 
 print(GO_BC_rf_DEGs_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_LC_rf_DEGs_Summary = GO_Summary(conversion_LC_rf_DEGs[,2],masterDEGs_entrez)
+GO_LC_rf_DEGs_Summary = GO_Summary(conversion_LC_rf_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Rand For Features \nfor Lung Cancer")
 
 print(GO_LC_rf_DEGs_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_BH_rf_DEGs_Summary = GO_Summary(conversion_BH_rf_DEGs[,2],masterDEGs_entrez)
+GO_BH_rf_DEGs_Summary = GO_Summary(conversion_BH_rf_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Rand For Features \nfor Healthy Breast")
 
 print(GO_BH_rf_DEGs_Summary)
 
 # Obtains the GO term summary table from the created function
-GO_LH_rf_DEGs_Summary = GO_Summary(conversion_LH_rf_DEGs[,2],masterDEGs_entrez)
+GO_LH_rf_DEGs_Summary = GO_Summary(conversion_LH_rf_DEGs[,2],masterDEGs_entrez,"\nDEGs-Trained Rand For Features \nfor Healthy Lung")
 
 print(GO_LH_rf_DEGs_Summary)
-```
 
+```
 
 **References**
 
@@ -1282,7 +1312,6 @@ Szklarczyk, D., et al. (2021). The STRING database in 2021: customizable protein
 
 Vaquerizas, J.M., et al. (2009). A census of human transcription factors: function, expression and evolution. Nature Reviews Genetics, 10(4), 252–263. https://doi.org/10.1038/nrg2538
 
-Wang, Q., Zhu, W., Xiao, G., Ding, M., Chang, J., & Liao, H. (2020). Effect of AGER on the biological behavior of non‑small cell lung cancer H1299 cells. Molecular Medicine Reports, 22(2), 810–818. https://doi.org/10.3892/mmr.2020.11176
 
 **Appendix A: GO Term Enrichment Plots**
 
